@@ -1,23 +1,72 @@
 (defpackage whirlog
   (:use cl)
-  (:export
-   close-table column column-count columns
-   delete-record
-   file find-record
-   let-tables
-   name new-column new-table
-   open-table
-   primary-key primary-key?
-   read-records record-count records
-   store-record
-   table
-   with-open-tables
-   tests))
+  (:export close-table column column-count column-value columns commit-changes context
+	   delete-record do-context
+	   file find-record
+	   let-tables
+	   name new-column new-context new-table
+	   open-table
+	   primary-key primary-key?
+	   read-records record-count records rollback-changes
+	   set-column-value store-record
+	   table
+	   with-db
+	   tests))
 
 (in-package whirlog)
 
 (defparameter *delete* 'd)
 (defparameter *eof* (gensym))
+
+(defvar *context*)
+(defvar *path* #P"")
+
+(defmacro dohash ((k v tbl) &body body)
+  (let (($i (gensym)) ($k (gensym)) ($next (gensym)) ($ok (gensym)))
+    `(with-hash-table-iterator (,$i ,tbl)
+       (tagbody
+	,$next
+	  (multiple-value-bind (,$ok ,$k ,v) (,$i)
+	    (when ,$ok
+	      (destructuring-bind ,k ,$k
+		,@body
+		(go ,$next))))))))
+
+(defun new-context ()
+  (make-hash-table :test 'equal))
+
+(defun push-change (tbl key rec)
+  (setf (gethash (cons tbl key) *context*) rec))
+
+(defun delete? (x)
+  (eq x *delete*))
+
+(defun write-value (out x)
+  (write x :stream out))
+
+(defun rollback-changes ()
+  (clrhash *context*))
+
+(defun commit-changes ()
+  (dohash ((tbl . key) rec *context*)
+    (with-slots (file records) tbl
+      (write-value file key)
+      (write-value file rec)
+      (terpri file)
+      (if (delete? rec)
+	  (remhash key records)
+	  (setf (gethash key records) rec))))
+  
+  (rollback-changes))
+
+(defmacro do-context (() &body body)
+  `(let ((*context* (new-context)))
+     (handler-case (progn
+		     ,@body
+		     (commit-changes))
+       (t (e)
+	 (rollback-changes)
+	 (error e)))))
 
 (defclass table ()
   ((name :initarg :name
@@ -31,10 +80,10 @@
    (records :initform (make-hash-table :test 'equal)
             :reader records)))
 
-(defun new-table (nam &rest cols)
-  "Returns new table with NAM and COLS"
+(defun new-table (name &rest cols)
+  "Returns new table with NAME and COLS"
   (make-instance 'table
-                 :name nam
+                 :name name
 		 :primary-key (remove-if-not #'primary-key? cols)
                  :columns cols))
 
@@ -43,9 +92,6 @@
 
 (defun eof? (x)
   (eq x *eof*))
-
-(defun delete? (x)
-  (eq x *delete*))
 
 (defun read-records (tbl in)
   "Reads records from IN into TBL"
@@ -56,8 +102,8 @@
           (when (eof? rec)
   	    (error "Missing record for key ~a" key))
 	  (if (delete? rec)
-	    (remhash key records)
-            (setf (gethash key records) rec))
+	      (remhash key records)
+              (setf (gethash key records) rec))
           (read-records tbl in))))))
 
 (defun open-table (tbl)
@@ -89,11 +135,11 @@
 		 :initform nil
                  :reader primary-key?)))
 
-(defun new-column (nam &rest opts)
-  "Returns new columns for NAM and OPTS"
+(defun new-column (name &rest opts)
+  "Returns new columns for NAME and OPTS"
   (apply #'make-instance
          'column
-         :name nam
+         :name name
 	 opts))
 
 (defun column-value (rec col)
@@ -115,14 +161,16 @@
   (apply #'set-column-values nil flds))
 
 (defun record-key (rec tbl)
+  "Returns key for REC in TBL"
   (mapcar (lambda (c)
             (column-value rec (name c)))
           (primary-key tbl)))
-			     
-(defmacro with-open-tables ((&rest tbls) &body body)
+
+(defmacro with-db ((path &rest tbls) &body body)
   (let (($tbl (gensym))
 	($tbls (gensym)))
-    `(let ((,$tbls (list ,@tbls)))
+    `(let ((,$tbls (list ,@tbls))
+	   (*path* (merge-pathnames *path* ,(or path #P""))))
        (dolist (,$tbl ,$tbls)
 	 (open-table ,$tbl))
        (unwind-protect
@@ -141,30 +189,27 @@
     `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
        ,@body)))
 
-(defun write-value (out x)
-  (write x :stream out))
-
 (defun store-record (tbl rec)
   "Stores REC in TBL"
-  (with-slots (file records) tbl
-    (let* ((rec (remove-duplicates rec :key #'first :from-end t))
-	   (key (record-key rec tbl)))
-      (write-value file key)
-      (write-value file rec)
-      (terpri file)
-      (setf (gethash key records) rec))))
+  (let ((rec (remove-duplicates rec :key #'first :from-end t)))
+    (push-change tbl (record-key rec tbl) rec)))
+
+(defmacro if-changed ((tbl key var) x y)
+  (let (($rec (gensym)))
+    `(let ((,$rec (gethash (cons ,tbl ,key) *context*)))
+       (if ,$rec
+	   (let ((,var ,$rec)) ,x)
+	   ,y))))
 
 (defun find-record (tbl &rest key)
   "Returns record for KEY in TBL if found, otherwise NIL"
-  (gethash key (records tbl)))
+  (if-changed (tbl key rec)
+	      (unless (delete? rec) rec)
+	      (gethash key (records tbl))))
 
 (defun delete-record (tbl &rest key)
   "Deletes REC from TBL"
-  (with-slots (file records) tbl
-    (write-value file key)
-    (write-value file *delete*)
-    (terpri file)
-    (remhash key records)))
+  (push-change tbl key *delete*))
 
 (defun test-setup ()
   (when (probe-file "users.tbl")
@@ -177,27 +222,29 @@
     (assert (string= (name users) 'users))
     (assert (= (column-count users) 2))
     (assert (eq (name (first (primary-key users))) 'username))
-    (with-open-tables (users)
+    (with-db (nil users)
       (assert (= (record-count users) 0)))))
 
 (defun record-tests ()
   (test-setup)
   
   (let-tables ((users (username :primary-key? t) password))
-    (with-open-tables (users)
-      (let ((rec (new-record 'username "ben_dover"
-			     'password "badum")))
-        (store-record users rec)
-        (assert (string= (column-value (find-record users "ben_dover") 'password)
-                         "badum"))
-	
-        (let ((rec (set-column-values rec 'password "dish")))
+    (with-db (nil users)
+      (do-context ()
+	(let ((rec (new-record 'username "ben_dover"
+			       'password "badum")))
+	  (assert (equal '("ben_dover") (record-key rec users)))
           (store-record users rec)
           (assert (string= (column-value (find-record users "ben_dover") 'password)
-                           "dish")))
-
-	(delete-record users "ben_dover")
-	(assert (null (find-record users "ben_dover")))))))
+                           "badum"))
+	  
+          (let ((rec (set-column-values rec 'password "dish")))
+            (store-record users rec)
+            (assert (string= (column-value (find-record users "ben_dover") 'password)
+                             "dish")))
+	  
+	  (delete-record users "ben_dover")
+	  (assert (null (find-record users "ben_dover"))))))))
 
 (defun tests ()
   (table-tests)

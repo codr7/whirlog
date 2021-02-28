@@ -2,6 +2,3 @@
 ** return from hash
 * add record-dirty?
 ** compare to hash
-* add transactions
-** add table lock
-** lock from transaction commit unless already locked
