@@ -1,5 +1,6 @@
 (defpackage whirlog
   (:use cl)
+  (:import-from sb-ext compare-and-swap)
   (:export close-table column column-count column-value columns commit-changes context
 	   delete-record do-context
 	   file find-record
@@ -57,13 +58,25 @@
 
 (defun find-table-record (tbl key)
   (first (table-records tbl key)))
-
+    
+(defmacro do-table ((tbl &optional slots) &body body)
+  `(with-slots (busy? ,@slots) ,tbl
+     (flet ((spin (old new)
+	      (with-slots (busy?) tbl
+		(unless (eq (compare-and-swap busy? old new) old)
+		  (spin ,tbl old new)))))       
+       (spin nil t)
+       
+       (unwind-protect
+	    (progn ,@body)
+	 (spin t nil)))))
+  
 (defun commit-changes ()
   (let (done)
-    (flet ((undo ()
+    (labels ((undo ()
 	       (dolist (c done)
 		 (destructuring-bind (op tbl key rec) c
-		   (with-slots (file records) tbl
+		   (do-table (tbl (file records))
 		     (ecase op
 		       (:store
 			(push rec (table-records tbl key)))
@@ -74,12 +87,22 @@
 		     (write-value file key)
 		     (write-value file rec)
 		     (terpri file))))
-	       nil))
+	       nil)
+	     (check (in)
+	       (if in
+		   (destructuring-bind (op tbl key rec) (first in)
+		     (declare (ignore op))
+		     (do-table (tbl)
+		       (if (equal (find-table-record tbl key) rec)
+			   (check (rest in))
+			   (undo))))
+		   t)))
+      
       (handler-case
 	  (progn 
 	    (dohash ((tbl . key) rec *context*)
-	      (when (or (not (delete? rec)) (find-record tbl key))
-		(with-slots (file records) tbl
+	      (do-table (tbl (file records))
+		(when (or (not (delete? rec)) (find-record tbl key))
 		  (write-value file key)
 		  (write-value file rec)
 		  (terpri file)
@@ -90,7 +113,9 @@
 			(push rec (table-records tbl key))
 			(push (list :store tbl key rec) done))))))
 
-	    (rollback-changes))
+	    (if (check done)
+		(rollback-changes)
+		(commit-changes)))
 	(t (e)
 	  (undo)
 	  (error e))))))
@@ -107,6 +132,8 @@
 (defclass table ()
   ((name :initarg :name
          :reader name)
+   (busy? :initform nil
+	  :reader busy?)
    (primary-key :initarg :primary-key
 		:reader primary-key)	 
    (columns :initarg :columns
