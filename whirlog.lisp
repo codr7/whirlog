@@ -50,12 +50,14 @@
 (defun commit-changes ()
   (dohash ((tbl . key) rec *context*)
     (with-slots (file records) tbl
-      (write-value file key)
-      (write-value file rec)
-      (terpri file)
-      (if (delete? rec)
-	  (remhash key records)
-	  (setf (gethash key records) rec))))
+      (when (or (not (delete? rec)) (find-record tbl rec))
+	(write-value file key)
+	(write-value file rec)
+	(terpri file)
+	
+	(if (delete? rec)
+	    (remhash key records)
+	    (setf (gethash key records) rec)))))
   
   (rollback-changes))
 
@@ -209,6 +211,8 @@
 
 (defun delete-record (tbl &rest key)
   "Deletes REC from TBL"
+  (unless (apply #'find-record tbl key)
+    (error "Record not found: ~a ~a" (name tbl) key))
   (push-change tbl key *delete*))
 
 (defun test-setup ()
@@ -230,21 +234,23 @@
   
   (let-tables ((users (username :primary-key? t) password))
     (with-db (nil users)
-      (do-context ()
 	(let ((rec (new-record 'username "ben_dover"
 			       'password "badum")))
 	  (assert (equal '("ben_dover") (record-key rec users)))
-          (store-record users rec)
-          (assert (string= (column-value (find-record users "ben_dover") 'password)
-                           "badum"))
 	  
-          (let ((rec (set-column-values rec 'password "dish")))
+	  (do-context ()
             (store-record users rec)
             (assert (string= (column-value (find-record users "ben_dover") 'password)
-                             "dish")))
+                             "badum"))
+	    
+            (let ((rec (set-column-values rec 'password "dish")))
+              (store-record users rec))
+	    
+            (assert (string= (column-value (find-record users "ben_dover") 'password)
+                             "dish"))
 	  
-	  (delete-record users "ben_dover")
-	  (assert (null (find-record users "ben_dover"))))))))
+	    (delete-record users "ben_dover")
+	    (assert (null (find-record users "ben_dover"))))))))
 
 (defun tests ()
   (table-tests)
