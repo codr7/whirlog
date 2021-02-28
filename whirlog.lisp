@@ -56,18 +56,40 @@
     (setf (gethash key records) val)))
 
 (defun commit-changes ()
-  (dohash ((tbl . key) rec *context*)
-    (with-slots (file records) tbl
-      (when (or (not (delete? rec)) (find-record tbl key))
-	(write-value file key)
-	(write-value file rec)
-	(terpri file)
+    (let (done)
+      (handler-case
+	  (progn 
+	    (dohash ((tbl . key) rec *context*)
+	      (when (or (not (delete? rec)) (find-record tbl key))
+		(with-slots (file records) tbl
+		  (write-value file key)
+		  (write-value file rec)
+		  (terpri file)
+		
+		  (if (delete? rec)
+		      (setf rec (pop (table-records tbl key)))
+		      (progn
+			(push rec (table-records tbl key))
+			(setf rec nil))))
+		
+		(push (cons (cons tbl key) rec) done)))
 	
-	(if (delete? rec)
-	    (pop (table-records tbl key))
-	    (push rec (table-records tbl key))))))
-  
-  (rollback-changes))
+	    (rollback-changes))
+	(t (e)
+	  (dolist (c done)
+	    (destructuring-bind ((tbl . key) rec) c
+	      (with-slots (file records) tbl
+		(if rec
+		    (push rec (table-records tbl key))
+		    (progn 
+		      (pop (table-records tbl key))
+		      (setf rec (first (table-records tbl key)))))
+		
+		(write-value file key)
+		(write-value file (or rec *delete*))
+		(terpri file))))
+
+	(error e)))))
 
 (defmacro do-context (() &body body)
   `(let ((*context* (new-context)))
