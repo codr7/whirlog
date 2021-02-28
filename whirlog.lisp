@@ -2,7 +2,7 @@
   (:use cl)
   (:import-from sb-ext compare-and-swap)
   (:export close-table column column-count column-value columns commit-changes context
-	   delete-record do-context
+	   delete-record do-context do-sync
 	   file find-record
 	   let-tables
 	   name new-column new-context new-table
@@ -48,18 +48,7 @@
 (defun rollback-changes ()
   (clrhash *context*))
 
-(defun table-records (tbl key)
-  (with-slots (records) tbl
-    (gethash key records)))
-
-(defun (setf table-records) (val tbl key)
-  (with-slots (records) tbl
-    (setf (gethash key records) val)))
-
-(defun find-table-record (tbl key)
-  (first (table-records tbl key)))
-    
-(defmacro do-table ((tbl &optional slots) &body body)
+(defmacro do-sync ((tbl &optional slots) &body body)
   `(with-slots (busy? ,@slots) ,tbl
      (tagbody
 	lock
@@ -72,19 +61,35 @@
 	unlock
 	  (unless (eq (compare-and-swap busy? t nil) t)
 	    (go unlock))))))
+
+(defun table-records (tbl key &key (sync? t))
+  (with-slots (records) tbl
+    (if sync?
+	(do-sync (tbl) (gethash key records))
+	(gethash key records))))
+
+(defun (setf table-records) (val tbl key &key (sync? t))
+  (with-slots (records) tbl
+    (if sync?
+	(do-sync (tbl) (setf (gethash key records) val))
+	(setf (gethash key records) val))))
+
+(defun find-table-record (tbl key &key (sync? t))
+  (first (table-records tbl key :sync? sync?)))
+    
   
 (defun commit-changes ()
   (let (done)
     (labels ((undo ()
 	       (dolist (c done)
 		 (destructuring-bind (op tbl key rec) c
-		   (do-table (tbl (file records))
+		   (do-sync (tbl (file records))
 		     (ecase op
 		       (:store
-			(push rec (table-records tbl key)))
+			(push rec (table-records tbl key :sync? nil)))
 		       (:delete 
-			(pop (table-records tbl key))
-			(setf rec (or (first (table-records tbl key)) *delete*))))
+			(pop (table-records tbl key :sync? nil))
+			(setf rec (or (first (table-records tbl key :sync? nil)) *delete*))))
 		     
 		     (write-value file key)
 		     (write-value file rec)
@@ -94,22 +99,22 @@
 	       (if in
 		   (destructuring-bind (op tbl key rec) (first in)
 		     (declare (ignore op))
-		     (if (equal (do-table (tbl) (find-table-record tbl key)) rec)
+		     (if (equal (find-table-record tbl key) rec)
 			 (check (rest in))
 			 (undo)))
 		   t))) 
       (handler-case
 	  (progn 
 	    (dohash ((tbl . key) rec *context*)
-	      (do-table (tbl (file records))
+	      (do-sync (tbl (file records))
 		(write-value file key)
 		(write-value file rec)
 		(terpri file)
 		
 		(if (delete? rec)
-		    (push (list :delete tbl key (pop (table-records tbl key))) done)
+		    (push (list :delete tbl key (pop (table-records tbl key :sync? nil))) done)
 		    (progn
-		      (push rec (table-records tbl key))
+		      (push rec (table-records tbl key :sync? nil))
 		      (push (list :store tbl key rec) done)))))
 
 	    (if (check done)
@@ -155,7 +160,7 @@
 (defun eof? (x)
   (eq x *eof*))
 
-(defun read-records (tbl in)
+(defun read-records (tbl in &key (sync? t))
   "Reads records from IN into TBL"
   (with-slots (records) tbl
     (let ((key (read-value in)))
@@ -164,8 +169,8 @@
           (when (eof? rec)
   	    (error "Missing record for key ~a" key))
 	  (if (delete? rec)
-	      (pop (table-records tbl key))
-              (push rec (table-records tbl key)))
+	      (pop (table-records tbl key :sync? sync?))
+              (push rec (table-records tbl key :sync? sync?)))
           (read-records tbl in))))))
 
 (defun open-table (tbl)
@@ -263,11 +268,11 @@
 	   (let ((,var ,$rec)) ,x)
 	   ,y))))
 
-(defun find-record (tbl key &key (index 0))
+(defun find-record (tbl key &key (index 0) (sync? t))
   "Returns record for KEY in TBL if found, otherwise NIL"
   (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (nth index (table-records tbl key)))))
+			 (nth index (table-records tbl key :sync? sync?)))))
 	      (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
