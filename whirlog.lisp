@@ -60,7 +60,7 @@
 
 (defun commit-changes ()
   (let (done)
-    (labels ((undo ()
+    (flet ((undo ()
 	       (dolist (c done)
 		 (destructuring-bind (op tbl key rec) c
 		   (with-slots (file records) tbl
@@ -74,16 +74,7 @@
 		     (write-value file key)
 		     (write-value file rec)
 		     (terpri file))))
-	       nil)
-	     (check (in)
-	       (if in
-		   (destructuring-bind (op tbl key rec) (first in)
-		     (declare (ignore op))
-		     (if (equal (find-table-record tbl key) rec)
-			 (check (rest in))
-			 (undo)))
-		   t)))
-      
+	       nil))
       (handler-case
 	  (progn 
 	    (dohash ((tbl . key) rec *context*)
@@ -99,9 +90,7 @@
 			(push rec (table-records tbl key))
 			(push (list :store tbl key rec) done))))))
 
-	    (if (check done)
-		(rollback-changes)
-		(commit-changes)))
+	    (rollback-changes))
 	(t (e)
 	  (undo)
 	  (error e))))))
