@@ -47,17 +47,25 @@
 (defun rollback-changes ()
   (clrhash *context*))
 
+(defun table-records (tbl key)
+  (with-slots (records) tbl
+    (gethash key records)))
+
+(defun (setf table-records) (val tbl key)
+  (with-slots (records) tbl
+    (setf (gethash key records) val)))
+
 (defun commit-changes ()
   (dohash ((tbl . key) rec *context*)
     (with-slots (file records) tbl
-      (when (or (not (delete? rec)) (find-record tbl rec))
+      (when (or (not (delete? rec)) (find-record tbl key))
 	(write-value file key)
 	(write-value file rec)
 	(terpri file)
 	
 	(if (delete? rec)
-	    (remhash key records)
-	    (setf (gethash key records) rec)))))
+	    (pop (table-records tbl key))
+	    (push rec (table-records tbl key))))))
   
   (rollback-changes))
 
@@ -104,8 +112,8 @@
           (when (eof? rec)
   	    (error "Missing record for key ~a" key))
 	  (if (delete? rec)
-	      (remhash key records)
-              (setf (gethash key records) rec))
+	      (pop (table-records tbl key))
+              (push rec (table-records tbl key)))
           (read-records tbl in))))))
 
 (defun open-table (tbl)
@@ -203,15 +211,15 @@
 	   (let ((,var ,$rec)) ,x)
 	   ,y))))
 
-(defun find-record (tbl &rest key)
+(defun find-record (tbl key &key (index 0))
   "Returns record for KEY in TBL if found, otherwise NIL"
   (if-changed (tbl key rec)
 	      (unless (delete? rec) rec)
-	      (gethash key (records tbl))))
+	      (nth index (table-records tbl key))))
 
-(defun delete-record (tbl &rest key)
+(defun delete-record (tbl key)
   "Deletes REC from TBL"
-  (unless (apply #'find-record tbl key)
+  (unless (find-record tbl key)
     (error "Record not found: ~a ~a" (name tbl) key))
   (push-change tbl key *delete*))
 
@@ -239,18 +247,20 @@
 	  (assert (equal '("ben_dover") (record-key rec users)))
 	  
 	  (do-context ()
-            (store-record users rec)
-            (assert (string= (column-value (find-record users "ben_dover") 'password)
-                             "badum"))
-	    
+	    (store-record users rec)
+            (assert (string= (column-value (find-record users '("ben_dover")) 'password)
+                             "badum")))
+	  
+	  (do-context ()
             (let ((rec (set-column-values rec 'password "dish")))
               (store-record users rec))
-	    
-            (assert (string= (column-value (find-record users "ben_dover") 'password)
-                             "dish"))
+
+            (assert (string= (column-value (find-record users '("ben_dover")) 'password)
+                             "dish"))))
 	  
-	    (delete-record users "ben_dover")
-	    (assert (null (find-record users "ben_dover"))))))))
+	  (do-context ()
+	    (delete-record users '("ben_dover"))
+	    (assert (null (find-record users '("ben_dover"))))))))
 
 (defun tests ()
   (table-tests)
