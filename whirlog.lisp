@@ -61,15 +61,17 @@
     
 (defmacro do-table ((tbl &optional slots) &body body)
   `(with-slots (busy? ,@slots) ,tbl
-     (flet ((spin (old new)
-	      (with-slots (busy?) tbl
-		(unless (eq (compare-and-swap busy? old new) old)
-		  (spin ,tbl old new)))))       
-       (spin nil t)
+     (tagbody
+	lock
+	(unless (eq (compare-and-swap busy? nil t) nil)
+	  (go lock)))
        
-       (unwind-protect
-	    (progn ,@body)
-	 (spin t nil)))))
+     (unwind-protect
+	  (progn ,@body)
+       (tagbody
+	unlock
+	  (unless (eq (compare-and-swap busy? t nil) t)
+	    (go unlock))))))
   
 (defun commit-changes ()
   (let (done)
@@ -92,26 +94,23 @@
 	       (if in
 		   (destructuring-bind (op tbl key rec) (first in)
 		     (declare (ignore op))
-		     (do-table (tbl)
-		       (if (equal (find-table-record tbl key) rec)
-			   (check (rest in))
-			   (undo))))
-		   t)))
-      
+		     (if (equal (do-table (tbl) (find-table-record tbl key)) rec)
+			 (check (rest in))
+			 (undo)))
+		   t))) 
       (handler-case
 	  (progn 
 	    (dohash ((tbl . key) rec *context*)
 	      (do-table (tbl (file records))
-		(when (or (not (delete? rec)) (find-record tbl key))
-		  (write-value file key)
-		  (write-value file rec)
-		  (terpri file)
-		  
-		  (if (delete? rec)
-		      (push (list :delete tbl key (pop (table-records tbl key))) done)
-		      (progn
-			(push rec (table-records tbl key))
-			(push (list :store tbl key rec) done))))))
+		(write-value file key)
+		(write-value file rec)
+		(terpri file)
+		
+		(if (delete? rec)
+		    (push (list :delete tbl key (pop (table-records tbl key))) done)
+		    (progn
+		      (push rec (table-records tbl key))
+		      (push (list :store tbl key rec) done)))))
 
 	    (if (check done)
 		(rollback-changes)
