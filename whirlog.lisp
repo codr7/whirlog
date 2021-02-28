@@ -55,8 +55,35 @@
   (with-slots (records) tbl
     (setf (gethash key records) val)))
 
+(defun find-table-record (tbl key)
+  (first (table-records tbl key)))
+
 (defun commit-changes ()
-    (let (done)
+  (let (done)
+    (labels ((undo ()
+	       (dolist (c done)
+		 (destructuring-bind (op tbl key rec) c
+		   (with-slots (file records) tbl
+		     (ecase op
+		       (:store
+			(push rec (table-records tbl key)))
+		       (:delete 
+			(pop (table-records tbl key))
+			(setf rec (or (first (table-records tbl key)) *delete*))))
+		     
+		     (write-value file key)
+		     (write-value file rec)
+		     (terpri file))))
+	       nil)
+	     (check (in)
+	       (if in
+		   (destructuring-bind (op tbl key rec) (first in)
+		     (declare (ignore op))
+		     (if (equal (find-table-record tbl key) rec)
+			 (check (rest in))
+			 (undo)))
+		   t)))
+      
       (handler-case
 	  (progn 
 	    (dohash ((tbl . key) rec *context*)
@@ -65,31 +92,19 @@
 		  (write-value file key)
 		  (write-value file rec)
 		  (terpri file)
-		
+		  
 		  (if (delete? rec)
-		      (setf rec (pop (table-records tbl key)))
+		      (push (list :delete tbl key (pop (table-records tbl key))) done)
 		      (progn
 			(push rec (table-records tbl key))
-			(setf rec nil))))
-		
-		(push (cons (cons tbl key) rec) done)))
-	
-	    (rollback-changes))
-	(t (e)
-	  (dolist (c done)
-	    (destructuring-bind ((tbl . key) rec) c
-	      (with-slots (file records) tbl
-		(if rec
-		    (push rec (table-records tbl key))
-		    (progn 
-		      (pop (table-records tbl key))
-		      (setf rec (first (table-records tbl key)))))
-		
-		(write-value file key)
-		(write-value file (or rec *delete*))
-		(terpri file))))
+			(push (list :store tbl key rec) done))))))
 
-	(error e)))))
+	    (if (check done)
+		(rollback-changes)
+		(commit-changes)))
+	(t (e)
+	  (undo)
+	  (error e))))))
 
 (defmacro do-context (() &body body)
   `(let ((*context* (new-context)))
