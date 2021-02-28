@@ -15,7 +15,7 @@
 
 (in-package whirlog)
 
-(defparameter *delete* 'd)
+(defparameter *delete* 'D)
 (defparameter *eof* (gensym))
 
 (defvar *context*)
@@ -213,9 +213,10 @@
 
 (defun find-record (tbl key &key (index 0))
   "Returns record for KEY in TBL if found, otherwise NIL"
-  (if-changed (tbl key rec)
-	      (unless (delete? rec) rec)
-	      (nth index (table-records tbl key))))
+  (let ((rec (if-changed (tbl key rec)
+			 rec
+			 (nth index (table-records tbl key)))))
+	      (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
   "Deletes REC from TBL"
