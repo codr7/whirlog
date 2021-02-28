@@ -118,12 +118,12 @@
 
 (defun open-table (tbl)
   "Opens and assigns TBL's file"
-  (let ((fil (open (format nil "~a.tbl" (string-downcase (symbol-name (name tbl))))
-                   :direction :io
-		   :if-exists :overwrite
-		   :if-does-not-exist :create)))
-    (setf (slot-value tbl 'file) fil)
-    (read-records tbl fil)))
+  (let ((file (open (format nil "~a.tbl" (merge-pathnames *path* (string-downcase (symbol-name (name tbl)))))
+            :direction :io
+	    :if-exists :overwrite
+	    :if-does-not-exist :create)))
+    (setf (slot-value tbl 'file) file)
+    (read-records tbl file)))
 
 (defun close-table (tbl)
   "Closes and unbinds TBL's file"
