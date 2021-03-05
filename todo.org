@@ -1,4 +1,6 @@
-* add mt test
+* change table records to rb tree
+** update readme
+* add thread test
 ** store in same table from multiple threads 
 ** iter key
 ** inc count

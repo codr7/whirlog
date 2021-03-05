@@ -1,6 +1,7 @@
 (defpackage whirlog
   (:use cl)
   (:import-from sb-ext compare-and-swap)
+  (:import-from util dohash)
   (:export close-table column column-count column-value columns commit-changes context
 	   delete-record do-context do-sync
 	   file find-record
@@ -21,17 +22,6 @@
 
 (defvar *context*)
 (defvar *path* #P"")
-
-(defmacro dohash ((k v tbl) &body body)
-  (let (($i (gensym)) ($k (gensym)) ($next (gensym)) ($ok (gensym)))
-    `(with-hash-table-iterator (,$i ,tbl)
-       (tagbody
-	  ,$next
-	  (multiple-value-bind (,$ok ,$k ,v) (,$i)
-	    (when ,$ok
-	      (destructuring-bind ,k ,$k
-		,@body
-		(go ,$next))))))))
 
 (defun new-context ()
   "Returns a fresh context"
