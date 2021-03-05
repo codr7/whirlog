@@ -26,7 +26,7 @@
   (let (($i (gensym)) ($k (gensym)) ($next (gensym)) ($ok (gensym)))
     `(with-hash-table-iterator (,$i ,tbl)
        (tagbody
-	,$next
+	  ,$next
 	  (multiple-value-bind (,$ok ,$k ,v) (,$i)
 	    (when ,$ok
 	      (destructuring-bind ,k ,$k
@@ -56,10 +56,10 @@
 (defmacro do-sync ((tbl &optional slots) &body body)
   `(with-slots (busy? ,@slots) ,tbl
      (tagbody
-	lock
+      lock
 	(unless (eq (compare-and-swap busy? nil t) nil)
 	  (go lock)))
-       
+     
      (unwind-protect
 	  (progn ,@body)
        (tagbody
@@ -84,7 +84,7 @@
 (defun find-table-record (tbl key &key (sync? t))
   "Returns recod for KEY in TBL, or NIL if not found"
   (first (table-records tbl key :sync? sync?)))
-    
+
 (defun commit-changes (&key (retries 3))
   "Commits changes in current context"
   (let (done)
@@ -187,9 +187,9 @@
 (defun open-table (tbl)
   "Opens and assigns TBL's file"
   (let ((file (open (format nil "~a.tbl" (merge-pathnames *path* (string-downcase (symbol-name (name tbl)))))
-            :direction :io
-	    :if-exists :overwrite
-	    :if-does-not-exist :create)))
+		    :direction :io
+		    :if-exists :overwrite
+		    :if-does-not-exist :create)))
     (setf (slot-value tbl 'file) file)
     (read-records tbl file)))
 
@@ -284,7 +284,7 @@
   (let ((rec (if-changed (tbl key rec)
 			 rec
 			 (nth index (table-records tbl key :sync? sync?)))))
-	      (unless (delete? rec) rec)))
+    (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
   "Deletes REC from TBL"
@@ -311,25 +311,25 @@
   
   (let-tables ((users (username :primary-key? t) password))
     (with-db (nil users)
-	(let ((rec (new-record 'username "ben_dover"
-			       'password "badum")))
-	  (assert (equal '("ben_dover") (record-key rec users)))
-	  
-	  (do-context ()
-	    (store-record users rec)
-            (assert (string= (column-value (find-record users '("ben_dover")) 'password)
-                             "badum")))
-	  
-	  (do-context ()
-            (let ((rec (set-column-values rec 'password "dish")))
-              (store-record users rec))
+      (let ((rec (new-record 'username "ben_dover"
+			     'password "badum")))
+	(assert (equal '("ben_dover") (record-key rec users)))
+	
+	(do-context ()
+	  (store-record users rec)
+          (assert (string= (column-value (find-record users '("ben_dover")) 'password)
+                           "badum")))
+	
+	(do-context ()
+          (let ((rec (set-column-values rec 'password "dish")))
+            (store-record users rec))
 
-            (assert (string= (column-value (find-record users '("ben_dover")) 'password)
-                             "dish"))))
-	  
-	  (do-context ()
-	    (delete-record users '("ben_dover"))
-	    (assert (null (find-record users '("ben_dover"))))))))
+          (assert (string= (column-value (find-record users '("ben_dover")) 'password)
+                           "dish"))))
+      
+      (do-context ()
+	(delete-record users '("ben_dover"))
+	(assert (null (find-record users '("ben_dover"))))))))
 
 (defun tests ()
   (table-tests)
