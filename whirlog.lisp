@@ -1,6 +1,7 @@
 (defpackage whirlog
   (:use cl)
   (:import-from sb-ext compare-and-swap)
+  (:import-from sb-thread thread-yield)
   (:import-from util dohash)
   (:export close-table column column-count column-value columns commit-changes context
 	   delete-record do-context do-sync
@@ -48,6 +49,7 @@
      (tagbody
       lock
 	(unless (eq (compare-and-swap busy? nil t) nil)
+	  (thread-yield)
 	  (go lock)))
      
      (unwind-protect
@@ -55,6 +57,7 @@
        (tagbody
 	unlock
 	  (unless (eq (compare-and-swap busy? t nil) t)
+	    (thread-yield)
 	    (go unlock))))))
 
 (defun table-records (tbl key &key (sync? t))
@@ -118,7 +121,9 @@
 
 	    (if (check)
 		(rollback-changes)
-		(commit-changes :retries (decf retries))))
+		(progn
+		  (thread-yield)
+		  (commit-changes :retries (decf retries)))))
 	(t (e)
 	  (undo)
 	  (error e))))))

@@ -1,5 +1,7 @@
 * change table records to rb tree
 ** update readme
+* add reload test
+** extract assertions
 * add thread test
 ** store in same table from multiple threads 
 ** iter key
