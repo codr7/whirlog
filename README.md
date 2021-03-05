@@ -29,18 +29,16 @@ The design is based on a [Lisp tutorial]() I wrote, but adds several significant
 ```
 
 ### Contexts
-Contexts are completely independent, atomic transactions.
-Feel free to start as many as you like, nested, or in parallel threads.
+Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads.
 
 ### Versions
-All stored versions of a record are loaded into RAM.
-`find-record` has a separate `:index` parameter that allows indexing in reverse order, `0` being the default /  most recent; a `NIL` result is returned once you hit the end.
+All stored versions of a record are loaded into RAM. `find-record` takes a separate `:index`-parameter that allows indexing in reverse order, `0` being the default /  most recent; `NIL` is returned once you hit the end.
 
 ### Records
-Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value is allowed as field value, and that the log is human readable as well as easy to process programatically.
+Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that the log is human readable as well as easy to process programatically.
 
 ```
 ("ben_dover")((WHIRLOG::PASSWORD . "badum") (WHIRLOG::USERNAME . "ben_dover"))
 ("ben_dover")((WHIRLOG::PASSWORD . "dish") (WHIRLOG::USERNAME . "ben_dover"))
-("ben_dover")WHIRLOG::D
+("ben_dover"):D
 ```
