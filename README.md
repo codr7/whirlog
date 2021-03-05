@@ -28,6 +28,9 @@ The design is based on a [Lisp tutorial](https://github.com/codr7/whirlisp) I wr
 	    (assert (null (find-record users '("ben_dover")))))))
 ```
 
+### Databases
+Databases are directories containing one log file per table. `with-db` may be used to (optionally) indicate a directory and open specified tables from there.
+
 ### Contexts
 Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads.
 
