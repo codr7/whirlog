@@ -2,7 +2,7 @@
 
 ### Introduction
 Whirlog is a basic, single process, multi threaded, log-based relational database implemented in Common Lisp.
-The design is based on a [Lisp tutorial](https://github.com/codr7/whirlisp) I wrote, but adds several significant features to allow it to cover more than the simplest cases.
+The design is based on a [Lisp tutorial](https://github.com/codr7/whirlisp) I wrote, but adds several significant features that allows it to cover more than the simplest cases.
 
 ```
   (let-tables ((users (username :primary-key? t) password))
@@ -46,7 +46,7 @@ Records are implemented as immutable lists of pairs, aka. association lists or a
 ```
 
 #### Versions
-All stored versions of a record are loaded into RAM. `find-record` takes a separate `:index`-parameter that allows indexing in reverse order, `0` being the default /  most recent; `NIL` is returned once you hit the end.
+All stored versions (since the last delete) of a record (identified by its primary key) are stacked and hashed on primary key in RAM. `find-record` takes a separate `:index`-parameter that allows indexing in reverse order, `0` being the default /  most recent; `NIL` is returned once you hit the end.
 
 ### Threads
 All threaded table access except for writes (store/delete) has to be protected either by enclosing in `do-sync` or by passing appropriate `:sync?`-arguments. `commit-changes` needs exclusive table access and will eventually fail with an error if it fails to acquire a table-specific spinlock implemented using SBCL atomics.

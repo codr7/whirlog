@@ -170,7 +170,7 @@
           (when (eof? rec)
   	    (error "Missing record for key ~a" key))
 	  (if (delete? rec)
-	      (pop (table-records tbl key :sync? sync?))
+	      (setf (table-records tbl key :sync? sync?) nil)
               (push rec (table-records tbl key :sync? sync?)))
           (read-records tbl in))))))
 
