@@ -135,9 +135,10 @@
 
 (defmacro do-context (() &body body)
   `(let ((*context* (new-context)))
-     (handler-case (progn
-		     ,@body
-		     (commit-changes))
+     (handler-case
+	 (progn
+	   ,@body
+	   (commit-changes))
        (t (e)
 	 (rollback-changes)
 	 (error e)))))
