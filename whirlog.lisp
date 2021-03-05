@@ -82,7 +82,7 @@
 	(setf (gethash key records) val))))
 
 (defun find-table-record (tbl key &key (sync? t))
-  "Returns recod for KEY in TBL, or NIL if not found"
+  "Returns record for KEY in TBL, or NIL if not found"
   (first (table-records tbl key :sync? sync?)))
 
 (defun commit-changes (&key (retries 3))
