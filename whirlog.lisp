@@ -34,18 +34,23 @@
 		(go ,$next))))))))
 
 (defun new-context ()
+  "Returns a fresh context"
   (make-hash-table :test 'equal))
 
 (defun push-change (tbl key rec)
+  "Pushes change for REC with KEY in TBL"
   (setf (gethash (cons tbl key) *context*) rec))
 
-(defun delete? (x)
-  (eq x *delete*))
+(defun delete? (rec)
+  "Returns T if REC is a delete"
+  (eq rec *delete*))
 
 (defun write-value (out x)
+  "Writes X to OUT"
   (write x :stream out))
 
 (defun rollback-changes ()
+  "Rolls back changes in current context"
   (clrhash *context*))
 
 (defmacro do-sync ((tbl &optional slots) &body body)
@@ -63,22 +68,25 @@
 	    (go unlock))))))
 
 (defun table-records (tbl key &key (sync? t))
+  "Returns stack of records for KEY in TBL"
   (with-slots (records) tbl
     (if sync?
 	(do-sync (tbl) (gethash key records))
 	(gethash key records))))
 
 (defun (setf table-records) (val tbl key &key (sync? t))
+  "Sets stack of records for KEY in TBL to VAL"
   (with-slots (records) tbl
     (if sync?
 	(do-sync (tbl) (setf (gethash key records) val))
 	(setf (gethash key records) val))))
 
 (defun find-table-record (tbl key &key (sync? t))
+  "Returns recod for KEY in TBL, or NIL if not found"
   (first (table-records tbl key :sync? sync?)))
     
-  
 (defun commit-changes (&key (retries 3))
+  "Commits changes in current context"
   (let (done)
     (labels ((undo ()
 	       (dolist (c done)
@@ -156,9 +164,11 @@
                  :columns cols))
 
 (defun read-value (in)
+  "Reads value from IN"
   (read in nil *eof*))
 
 (defun eof? (x)
+  "Returns T if X is EOF"
   (eq x *eof*))
 
 (defun read-records (tbl in &key (sync? t))
