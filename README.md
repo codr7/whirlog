@@ -37,7 +37,7 @@ Any second now...
 Any second now...
 
 ### Records
-Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that the log is human readable as well as easy to process programatically.
+Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
 
 ```
 ("ben_dover")((WHIRLOG::PASSWORD . "badum") (WHIRLOG::USERNAME . "ben_dover"))
