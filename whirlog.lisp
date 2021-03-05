@@ -16,7 +16,7 @@
 
 (in-package whirlog)
 
-(defparameter *delete* 'D)
+(defparameter *delete* :D)
 (defparameter *eof* (gensym))
 
 (defvar *context*)
@@ -78,7 +78,7 @@
   (first (table-records tbl key :sync? sync?)))
     
   
-(defun commit-changes ()
+(defun commit-changes (&key (retries 3))
   (let (done)
     (labels ((undo ()
 	       (dolist (c done)
@@ -86,23 +86,24 @@
 		   (do-sync (tbl (file records))
 		     (ecase op
 		       (:store
-			(push rec (table-records tbl key :sync? nil)))
+			(pop (table-records tbl key :sync? nil)))
 		       (:delete 
-			(pop (table-records tbl key :sync? nil))
-			(setf rec (or (first (table-records tbl key :sync? nil)) *delete*))))
-		     
+			(push rec (table-records tbl key :sync? nil))))
+
 		     (write-value file key)
 		     (write-value file rec)
 		     (terpri file))))
+	       (setf done nil)
 	       nil)
-	     (check (in)
-	       (if in
-		   (destructuring-bind (op tbl key rec) (first in)
-		     (declare (ignore op))
-		     (if (equal (find-table-record tbl key) rec)
-			 (check (rest in))
-			 (undo)))
-		   t))) 
+	     (check ()
+	       (dohash ((tbl . key) rec *context*)
+		 (let ((trec (find-table-record tbl key)))
+		   (unless (or (eq rec *delete*) (equal trec rec))
+		     (if (zerop retries)
+			 (error "Commit failed: ~a ~a" trec rec) 
+			 (undo))
+		     (return-from check nil))))
+	       t))
       (handler-case
 	  (progn 
 	    (dohash ((tbl . key) rec *context*)
@@ -115,11 +116,11 @@
 		    (push (list :delete tbl key (pop (table-records tbl key :sync? nil))) done)
 		    (progn
 		      (push rec (table-records tbl key :sync? nil))
-		      (push (list :store tbl key rec) done)))))
+		      (push (list :store tbl key *delete*) done)))))
 
-	    (if (check done)
+	    (if (check)
 		(rollback-changes)
-		(commit-changes)))
+		(commit-changes :retries (decf retries))))
 	(t (e)
 	  (undo)
 	  (error e))))))
