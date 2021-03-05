@@ -275,11 +275,11 @@
 	   (let ((,var ,$rec)) ,x)
 	   ,y))))
 
-(defun find-record (tbl key &key (index 0) (sync? t))
+(defun find-record (tbl key &key (version 0) (sync? t))
   "Returns record for KEY in TBL if found, otherwise NIL"
   (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (nth index (table-records tbl key :sync? sync?)))))
+			 (nth version (table-records tbl key :sync? sync?)))))
     (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
