@@ -35,7 +35,7 @@ Contexts are completely independent, atomic transactions. Feel free to start as 
 Tables contain stacks of records hashed on their primary keys.
 
 #### Keys
-Each table has a set of columns and a primary key.
+Each table has a set of columns, some of which form its primary key. Keys are compared using `equal`.
 
 ### Records
 Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
