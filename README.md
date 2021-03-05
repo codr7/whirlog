@@ -29,10 +29,10 @@ The design is based on a [Lisp tutorial](https://github.com/codr7/whirlisp) I wr
 ```
 
 ### Databases
-Databases are directories containing one log file per table. `with-db` may be used to (optionally) indicate a directory and open specified tables from there.
+Databases are directories containing one log file per table. `with-db` may be used to (optionally) indicate a path and open specified tables from there.
 
 ### Contexts
-Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads.
+Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads. Contexts are committed on success and rolled back on errors by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
 
 ### Tables
 Tables contain stacks of records hashed on their primary keys.
