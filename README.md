@@ -46,7 +46,7 @@ Records are implemented as immutable lists of pairs, aka. association lists or a
 ```
 
 #### Versions
-All stored versions (since the last delete) of a record (identified by its primary key) are stacked and hashed on primary key in RAM. `find-record` takes a separate `:index`-parameter that allows indexing in reverse order, `0` being the default /  most recent; `NIL` is returned once you hit the end.
+All stored versions (since the last delete) of a record (identified by its primary key) are stacked and hashed on primary key per table in RAM. `find-record` takes a separate `:index`-parameter that allows indexing in reverse order, `0` being the default /  most recent; `NIL` is returned once you hit the end.
 
 ### Threads
 All threaded table access except for writes (store/delete) has to be protected either by enclosing in `do-sync` or by passing appropriate `:sync?`-arguments. `commit-changes` needs exclusive table access and will eventually fail with an error if it fails to acquire a table-specific spinlock implemented using SBCL atomics.
