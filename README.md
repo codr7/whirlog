@@ -38,7 +38,7 @@ Contexts are completely independent, atomic transactions. Feel free to start as 
 Tables contain stacks of records indexed on their primary keys.
 
 #### Keys
-Each table has a set of columns, some of which form its primary key. Record keys are compared using `equal`.
+Each table has a set of columns, some of which form its primary key. Record keys are ordered using `rb:compare`.
 
 ### Records
 Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
