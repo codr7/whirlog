@@ -26,6 +26,10 @@
     ((string> x y) :gt)
     (t :eq)))
 
+(defmethod compare ((x symbol) y)
+  (declare (type symbol x y))
+  (compare (symbol-name x) (symbol-name y)))
+
 (defmethod compare ((x list) y)
   (declare (type list x y))
   (cond

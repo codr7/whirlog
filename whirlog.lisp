@@ -93,7 +93,8 @@
 
 		     (write-value file key)
 		     (write-value file rec)
-		     (terpri file))))
+		     (terpri file)
+		     (force-output file))))
 	       (setf done nil)
 	       nil)
 	     (check ()
@@ -112,6 +113,7 @@
 		(write-value file key)
 		(write-value file rec)
 		(terpri file)
+		(force-output file)
 		
 		(if (delete? rec)
 		    (push (list :delete tbl key (pop (table-records tbl key :sync? nil))) done)
@@ -180,14 +182,19 @@
               (push rec (table-records tbl key :sync? sync?)))
           (read-records tbl in))))))
 
+(defun trim-path (in)
+  (string-trim "*" in))
+   
 (defun open-table (tbl)
   "Opens and assigns TBL's file"
-  (let ((file (open (format nil "~a.tbl" (merge-pathnames *path* (string-downcase (symbol-name (name tbl)))))
-		    :direction :io
-		    :if-exists :overwrite
-		    :if-does-not-exist :create)))
-    (setf (slot-value tbl 'file) file)
-    (read-records tbl file)))
+  (let ((path (merge-pathnames *path* (string-downcase (trim-path (symbol-name (name tbl)))))))
+    (ensure-directories-exist path)
+    (let ((file (open (format nil "~a.tbl" path)
+		      :direction :io
+		      :if-exists :overwrite
+		      :if-does-not-exist :create)))
+      (setf (slot-value tbl 'file) file)
+      (read-records tbl file))))
 
 (defun close-table (tbl)
   "Closes and unbinds TBL's file"
