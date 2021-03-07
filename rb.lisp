@@ -2,15 +2,17 @@
   (:use cl)
   (:import-from util nor while)
   (:export clear
-	   find-node
+	   do-tree
+	   find-node 
+	   get-node
 	   new-root node-count
-	   remove-node root
+	   remove-node root root-node
 	   set-node
 	   tests benchmarks))
 
 (in-package rb)
 
-;(declaim (optimize (speed 3) (safety 0)))
+;;(declaim (optimize (speed 3) (safety 0)))
 
 (defmethod compare ((x fixnum) y)
   (declare (type fixnum x y))
@@ -44,6 +46,26 @@
        (if (eq res :eq)
 	   (compare (rest x) (rest y))
 	   res)))))
+
+(defmacro do-tree ((key val root) &body body)
+  (let (($done (gensym)) ($node (gensym)) ($todo (gensym)))
+    `(let ((,$node ,root) ,$todo ,$done)
+       (tagbody
+	next
+	  (unless ,$node (setf ,$node (pop ,$todo)))
+	  
+	  (when ,$node
+	    (when (node-right ,$node)
+	      (push (node-right ,$node) ,$todo))
+	    (push ,$node ,$done)
+	    (when (node-left ,$node)
+	      (setf ,$node (node-left ,$node))
+	      (go next))))
+       
+       (dolist (,$node ,$done)
+	 (let ((,key (node-key ,$node))
+	       (,val (node-value ,$node)))
+	   ,@body)))))
 
 (defstruct node
   (key nil :type t)
@@ -147,7 +169,7 @@
 
 (defun clear (root)
   (setf (root-node root) nil (root-size root) 0))
-  
+
 (defmacro movef-red-left (node)
   `(setf ,node (move-red-left ,node)))
 
@@ -221,7 +243,7 @@
       (setf (root-node root) new-root)
       val)))
 
-(defun find-node (key root)
+(defun get-node (key root)
   (declare (type root root))
   (let ((node (root-node root)))
     (while node
@@ -234,8 +256,25 @@
 	 (return))))
     (and node (node-value node))))
 
-(defun (setf find-node) (val key root)
+(defun (setf get-node) (val key root)
   (set-node val root :key key))
+
+(defun find-node (key root)
+  (declare (type root root))
+  (let ((node (root-node root)))
+    (tagbody
+     next
+       (ecase (ccompare root key (node-key node))
+	(:lt
+	 (when (node-left node)
+	   (setf node (node-left node))
+	   (go next))
+	 (:gt
+	  (when (node-right node)
+	    (setf node (node-right node))
+	    (go next)))
+	 (:eq))))
+    node))
 
 (defun tests ()
   (let ((root (new-root)))
@@ -246,11 +285,11 @@
     (assert (set-node 4 root))
     (assert (= (remove-node 2 root) 2))
     (assert (null (remove-node 2 root)))
-    (assert (= (size root) 3))
-    (assert (= (find-node 1 root) 1))
-    (assert (null (find-node 2 root)))
-    (assert (= (find-node 3 root) 3))
-    (assert (= (find-node 4 root) 4))))
+    (assert (= (node-count root) 3))
+    (assert (= (get-node 1 root) 1))
+    (assert (null (get-node 2 root)))
+    (assert (= (get-node 3 root) 3))
+    (assert (= (get-node 4 root) 4))))
 
 (defun benchmarks ()
   (let ((max 1000000))
@@ -268,6 +307,6 @@
        (dotimes (i max)
 	 (assert (set-node i root)))
        (dotimes (i max)
-	 (assert (= (find-node i root) i)))
+	 (assert (= (get-node i root) i)))
        (dotimes (i max)
 	 (assert (= (remove-node i root) i)))))))

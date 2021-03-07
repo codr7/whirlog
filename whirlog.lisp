@@ -4,7 +4,7 @@
   (:import-from sb-thread thread-yield)
   (:import-from util dohash)
   (:export close-table column column-count column-value columns commit-changes context
-	   delete-record do-context do-sync
+	   delete-record do-context do-records do-sync
 	   file find-record
 	   let-tables
 	   name new-column new-context new-table
@@ -64,15 +64,15 @@
   "Returns stack of records for KEY in TBL"
   (with-slots (records) tbl
     (if sync?
-	(do-sync (tbl) (rb:find-node key records))
-	(rb:find-node key records))))
+	(do-sync (tbl) (rb:get-node key records))
+	(rb:get-node key records))))
 
 (defun (setf table-records) (val tbl key &key (sync? t))
   "Sets stack of records for KEY in TBL to VAL"
   (with-slots (records) tbl
     (if sync?
-	(do-sync (tbl) (setf (rb:find-node key records) val))
-	(setf (rb:find-node key records) val))))
+	(do-sync (tbl) (setf (rb:get-node key records) val))
+	(setf (rb:get-node key records) val))))
 
 (defun find-table-record (tbl key &key (sync? t))
   "Returns record for KEY in TBL, or NIL if not found"
@@ -208,6 +208,13 @@
 (defun record-count (tbl)
   "Returns number of records in TBL"
   (rb:node-count (records tbl)))
+
+(defmacro do-records ((rec tbl &key start) &body body)
+  (let (($key (gensym)) ($recs (gensym)))
+    `(rb:do-tree (,$key ,$recs (if ,start (rb:find-node ,start (records ,tbl)) (rb:root-node (records ,tbl))))
+       (declare (ignore ,$key))
+       (let ((,rec (first ,$recs)))
+	 ,@body))))
 
 (defclass column ()
   ((name :initarg :name
