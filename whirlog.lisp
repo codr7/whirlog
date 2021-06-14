@@ -184,7 +184,7 @@
 
 (defun trim-path (in)
   (string-trim "*" in))
-   
+
 (defun open-table (tbl)
   "Opens and assigns TBL's file"
   (let ((path (merge-pathnames *path* (string-downcase (trim-path (symbol-name (name tbl)))))))
@@ -327,27 +327,41 @@
   
   (let-tables ((users (username :primary-key? t) password))
     (with-test-db (users)
-      (let ((rec (new-record 'username "ben_dover"
-			     'password "badum")))
-	(assert (equal '("ben_dover") (record-key rec users)))
+      (let ((rec (new-record 'username "foo"
+			     'password "bar")))
+	(assert (equal '("foo") (record-key rec users)))
 	
 	(do-context ()
 	  (store-record users rec)
-          (assert (string= (column-value (find-record users '("ben_dover")) 'password)
-                           "badum")))
+          (assert (string= (column-value (find-record users '("foo")) 'password)
+                           "bar")))
 	
 	(do-context ()
-          (let ((rec (set-column-values rec 'password "dish")))
+          (let ((rec (set-column-values rec 'password "baz")))
             (store-record users rec))
 
-          (assert (string= (column-value (find-record users '("ben_dover")) 'password)
-                           "dish"))))
+          (assert (string= (column-value (find-record users '("foo")) 'password)
+                           "baz"))))
       
       (do-context ()
-	(delete-record users '("ben_dover"))
-	(assert (null (find-record users '("ben_dover"))))))))
+	(delete-record users '("foo"))
+	(assert (null (find-record users '("foo"))))))))
+
+(defun reload-tests ()
+  (test-setup)
+  
+  (let-tables ((users (username :primary-key? t) password))
+    (with-test-db (users)
+      (let ((rec (new-record 'username "foo" 'password "bar")))
+	(do-context ()
+	  (store-record users rec))))
+
+    (with-test-db (users)
+      (do-context ()
+	(assert (string= (column-value (find-record users '("foo")) 'password) "bar"))))))
 
 (defun tests ()
   (table-tests)
-  (record-tests))
+  (record-tests)
+  (reload-tests))
 

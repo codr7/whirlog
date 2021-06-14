@@ -2,7 +2,6 @@
 ** return from hash
 * add record-dirty?
 ** compare to hash
-* add reload test
 * add thread test
 ** store in same table from multiple threads 
 ** iter key
