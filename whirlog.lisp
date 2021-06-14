@@ -309,6 +309,9 @@
 (defun test-setup ()
   (delete-if-exists "/tmp/whirlog/users.tbl"))
 
+(defmacro with-test-db ((&rest tables) &body body)
+  `(with-db ("/tmp/whirlog/" ,@tables) ,@body))
+
 (defun table-tests ()
   (test-setup)
   
@@ -316,14 +319,14 @@
     (assert (string= (name users) 'users))
     (assert (= (column-count users) 2))
     (assert (eq (name (first (primary-key users))) 'username))
-    (with-db ("/tmp/whirlog/" users)
+    (with-test-db (users)
       (assert (= (record-count users) 0)))))
 
 (defun record-tests ()
   (test-setup)
   
   (let-tables ((users (username :primary-key? t) password))
-    (with-db ("/tmp/whirlog/" users)
+    (with-test-db (users)
       (let ((rec (new-record 'username "ben_dover"
 			     'password "badum")))
 	(assert (equal '("ben_dover") (record-key rec users)))

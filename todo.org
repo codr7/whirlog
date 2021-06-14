@@ -1,12 +1,11 @@
+* add stored-record
+** return from hash
+* add record-dirty?
+** compare to hash
 * add reload test
-** extract assertions
 * add thread test
 ** store in same table from multiple threads 
 ** iter key
 ** inc count
 ** join threads
 ** close/reopen and check all recs
-* add stored-record
-** return from hash
-* add record-dirty?
-** compare to hash
