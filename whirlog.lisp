@@ -302,9 +302,12 @@
     (error "Record not found: ~a ~a" (name tbl) key))
   (push-change tbl key *delete*))
 
+(defun delete-if-exists (path)
+  (when (probe-file path)
+    (delete-file path)))
+
 (defun test-setup ()
-  (when (probe-file "users.tbl")
-    (assert (delete-file "users.tbl"))))
+  (delete-if-exists "/tmp/whirlog/users.tbl"))
 
 (defun table-tests ()
   (test-setup)
@@ -313,14 +316,14 @@
     (assert (string= (name users) 'users))
     (assert (= (column-count users) 2))
     (assert (eq (name (first (primary-key users))) 'username))
-    (with-db (nil users)
+    (with-db ("/tmp/whirlog/" users)
       (assert (= (record-count users) 0)))))
 
 (defun record-tests ()
   (test-setup)
   
   (let-tables ((users (username :primary-key? t) password))
-    (with-db (nil users)
+    (with-db ("/tmp/whirlog/" users)
       (let ((rec (new-record 'username "ben_dover"
 			     'password "badum")))
 	(assert (equal '("ben_dover") (record-key rec users)))
