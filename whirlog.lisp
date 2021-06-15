@@ -11,7 +11,7 @@
 	   open-table
 	   primary-key primary-key?
 	   read-records record-count records rollback-changes
-	   set-column-value store-record
+	   set-column-value store-record stored-record
 	   table
 	   with-db
 	   tests))
@@ -234,6 +234,10 @@
   "Returns value for COL in REC"
   (rest (assoc col rec)))
 
+(defun (setf column-value) (val rec col)
+  "Sets value for COL in REC to VAL"
+  (setf (rest (assoc col rec)) val))
+
 (defun set-column-values (rec &rest flds)
   "Returns REC with updated FLDS"
   (labels ((acc (in out)
@@ -283,17 +287,23 @@
     (push-change tbl (record-key rec tbl) rec)))
 
 (defmacro if-changed ((tbl key var) x y)
-  (let (($rec (gensym)))
-    `(let ((,$rec (gethash (cons ,tbl ,key) *context*)))
-       (if ,$rec
-	   (let ((,var ,$rec)) ,x)
+  (let ((rec (gensym)))
+    `(let ((,rec (gethash (cons ,tbl ,key) *context*)))
+       (if ,rec
+	   (let ((,var ,rec)) ,x)
 	   ,y))))
+
+(defun stored-record (tbl key &key (version 0) (sync? t))
+  (nth version (table-records tbl key :sync? sync?)))
+
+(defun (setf stored-record) (rec tbl key &key (version 0) (sync? t))
+  (setf (nth version (table-records tbl key :sync? sync?)) rec))
 
 (defun find-record (tbl key &key (version 0) (sync? t))
   "Returns record for KEY in TBL if found, otherwise NIL"
   (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (nth version (table-records tbl key :sync? sync?)))))
+			 (stored-record tbl key :version version :sync? sync?))))
     (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
@@ -360,8 +370,29 @@
       (do-context ()
 	(assert (string= (column-value (find-record users '("foo")) 'password) "bar"))))))
 
+(defun stored-tests ()
+  (test-setup)
+  
+  (let-tables ((test (key :primary-key? t) val))
+    (with-test-db (test)
+      (let ((rec (new-record 'key :foo 'val :bar)))
+	(do-context ()
+	  (store-record test rec))
+	(let ((rec (set-column-values rec 'val :baz)))
+	  (do-context ()
+	    (store-record test rec))))
+      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) :baz))
+      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) :bar))
+      
+      (setf (column-value (stored-record test '(:foo) :version 1) 'val) :qux)
+      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) :qux))
+
+      (setf (stored-record test '(:foo) :version 0) (new-record 'key :foo 'val :bar))
+      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) :bar)))))
+
 (defun tests ()
   (table-tests)
   (record-tests)
-  (reload-tests))
+  (reload-tests)
+  (stored-tests))
 

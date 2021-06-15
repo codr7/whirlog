@@ -1,7 +1,5 @@
-* add stored-record
-** return from hash
 * add record-dirty?
-** compare to hash
+** compare rec (default context - nil if not exists) to hash
 * add thread test
 ** store in same table from multiple threads 
 ** iter key
