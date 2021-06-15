@@ -1,7 +1,7 @@
 (defpackage rb
   (:use cl)
   (:import-from util nor while)
-  (:export clear
+  (:export clear compare
 	   do-tree
 	   find-node 
 	   get-node

@@ -2,8 +2,8 @@
   (:use cl)
   (:import-from sb-ext compare-and-swap)
   (:import-from sb-thread thread-yield)
-  (:import-from util dohash)
-  (:export close-table column column-count column-value columns commit-changes context
+  (:import-from util dohash get-kw sym)
+  (:export close-table column column-compare column-count column-value columns commit context
 	   delete-record do-context do-records do-sync
 	   file find-record
 	   let-tables
@@ -12,7 +12,7 @@
 	   primary-key primary-key?
 	   read-records record-count records rollback-changes
 	   set-column-value store-record stored-record
-	   table
+	   table table-compare table-records
 	   with-db
 	   tests))
 
@@ -78,7 +78,7 @@
   "Returns record for KEY in TBL, or NIL if not found"
   (first (table-records tbl key :sync? sync?)))
 
-(defun commit-changes (&key (retries 3))
+(defun commit (&key (retries 3))
   "Commits changes in current context"
   (let (done)
     (labels ((undo ()
@@ -125,7 +125,7 @@
 		(rollback-changes)
 		(progn
 		  (thread-yield)
-		  (commit-changes :retries (decf retries)))))
+		  (commit :retries (decf retries)))))
 	(t (e)
 	  (undo)
 	  (error e))))))
@@ -135,10 +135,28 @@
      (handler-case
 	 (progn
 	   ,@body
-	   (commit-changes))
+	   (commit))
        (t (e)
 	 (rollback-changes)
 	 (error e)))))
+
+(defclass column ()
+  ((name :initarg :name
+         :reader name)
+   (primary-key? :initarg :primary-key?
+		 :initform nil
+                 :reader primary-key?)))
+
+(defun new-column (name &rest opts)
+  "Returns new columns for NAME and OPTS"
+  (apply #'make-instance
+         'column
+         :name name
+	 opts))
+
+(defun column-value (rec col)
+  "Returns value for COL in REC"
+  (rest (assoc col rec)))
 
 (defclass table ()
   ((name :initarg :name
@@ -151,8 +169,7 @@
             :reader columns)
    (file :initarg :file
          :reader file)
-   (records :initform (rb:new-root)
-            :reader records)))
+   (records :reader records)))
 
 (defun new-table (name &rest cols)
   "Returns new table with NAME and COLS"
@@ -160,6 +177,23 @@
                  :name name
 		 :primary-key (remove-if-not #'primary-key? cols)
                  :columns cols))
+
+(defmethod column-compare ((col column) x y)
+  (rb:compare x y))
+
+(defmethod table-compare ((tbl table) x y)
+  (labels ((rec (cols)
+	     (if cols
+		 (let ((res (column-compare (first cols) x y)))
+		   (if (eq res :eq)
+		       (rec (rest cols))
+		       res))
+		 :eq)))
+    (rec (primary-key tbl))))
+
+(defmethod initialize-instance :after ((tbl table) &rest args &key &allow-other-keys)
+  (declare (ignore args))
+  (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y) (table-compare tbl x y)))))
 
 (defun read-value (in)
   "Reads value from IN"
@@ -216,24 +250,6 @@
        (let ((,rec (first ,$recs)))
 	 ,@body))))
 
-(defclass column ()
-  ((name :initarg :name
-         :reader name)
-   (primary-key? :initarg :primary-key?
-		 :initform nil
-                 :reader primary-key?)))
-
-(defun new-column (name &rest opts)
-  "Returns new columns for NAME and OPTS"
-  (apply #'make-instance
-         'column
-         :name name
-	 opts))
-
-(defun column-value (rec col)
-  "Returns value for COL in REC"
-  (rest (assoc col rec)))
-
 (defun (setf column-value) (val rec col)
   "Sets value for COL in REC to VAL"
   (setf (rest (assoc col rec)) val))
@@ -269,17 +285,23 @@
 	    (progn ,@body)
 	 (dolist (,$tbl ,$tbls)
 	   (close-table ,$tbl))))))
-
+   
 (defmacro let-tables ((&rest tables) &body body)
-  (labels ((bind (name &rest cols)
-	     `(,name (new-table ',name
-				,@(mapcar (lambda (c)
-					    (if (listp c)
-						`(new-column ',(first c) ,@(rest c))
-						`(new-column ',c)))
-					  cols)))))
-    `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
-       ,@body)))
+  (let ((ct (gensym)))
+    (labels ((bind (name &rest cols)
+	       `(,name (new-table ',name
+				  ,@(mapcar (lambda (c)
+					      (if (listp c)
+						  `(let ((,ct ,(get-kw :type c)))
+						     (if ,ct
+							 (apply (fdefinition (sym 'new- ,ct '-column))
+								',(first c)
+								,@(rest c))
+							 (new-column ',(first c) ,@(rest c))))
+						  `(new-column ',c)))
+					    cols)))))
+      `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
+	 ,@body))))
 
 (defun store-record (tbl rec)
   "Stores REC in TBL"
@@ -395,4 +417,3 @@
   (record-tests)
   (reload-tests)
   (stored-tests))
-

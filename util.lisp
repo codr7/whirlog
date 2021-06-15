@@ -1,7 +1,7 @@
 (defpackage util
   (:use cl)
   (:export dohash let-when nor while
-	   kw sethash sym))
+	   get-kw kw sethash sym))
 
 (in-package util)
 
@@ -32,6 +32,9 @@
 	  (when ,cnd
 	    ,@body
 	    (go ,$next))))))
+
+(defun get-kw (kw lst)
+  (second (member kw lst)))
 
 (defun kw (&rest args)
   (intern (with-output-to-string (out)
