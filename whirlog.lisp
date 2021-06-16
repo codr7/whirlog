@@ -3,15 +3,15 @@
   (:import-from sb-ext compare-and-swap)
   (:import-from sb-thread thread-yield)
   (:import-from util dohash let-kw sym)
-  (:export close-table column column-compare column-count column-value columns commit context
+  (:export close-table column column-compare column-count column-value columns commit committed-record context
 	   delete-record do-context do-records do-sync
 	   file find-record
+	   key key?
 	   let-tables
 	   name new-column new-context new-table
 	   open-table
-	   primary-key primary-key?
 	   read-records record-count records rollback-changes
-	   set-column-value store-record committed-record
+	   set-column-value store-record
 	   table table-compare table-records
 	   with-db
 	   tests))
@@ -143,9 +143,9 @@
 (defclass column ()
   ((name :initarg :name
          :reader name)
-   (primary-key? :initarg :primary-key?
+   (key? :initarg :key?
 		 :initform nil
-                 :reader primary-key?)))
+                 :reader key?)))
 
 (defun new-column (name &rest opts)
   "Returns new columns for NAME and OPTS"
@@ -172,8 +172,8 @@
          :reader name)
    (busy? :initform nil
 	  :reader busy?)
-   (primary-key :initarg :primary-key
-		:reader primary-key)	 
+   (key :initarg :key
+		:reader key)	 
    (columns :initarg :columns
             :reader columns)
    (file :initarg :file
@@ -184,7 +184,7 @@
   "Returns new table with NAME and COLS"
   (make-instance 'table
                  :name name
-		 :primary-key (remove-if-not #'primary-key? cols)
+		 :key (remove-if-not #'key? cols)
                  :columns cols))
 
 (defmethod column-compare ((col column) x y)
@@ -198,7 +198,7 @@
 		       (rec (rest cols))
 		       res))
 		 :eq)))
-    (rec (primary-key tbl))))
+    (rec (key tbl))))
 
 (defmethod initialize-instance :after ((tbl table) &rest args &key &allow-other-keys)
   (declare (ignore args))
@@ -281,7 +281,7 @@
   "Returns key for REC in TBL"
   (mapcar (lambda (c)
             (column-value rec (name c)))
-          (primary-key tbl)))
+          (key tbl)))
 
 (defmacro with-db ((path &rest tbls) &body body)
   (let (($tbl (gensym))
@@ -353,17 +353,17 @@
 (defun table-tests ()
   (test-setup)
   
-  (let-tables ((tbl (key :primary-key? t) val))
+  (let-tables ((tbl (key :key? t) val))
     (assert (string= (name tbl) 'tbl))
     (assert (= (column-count tbl) 2))
-    (assert (eq (name (first (primary-key tbl))) 'key))
+    (assert (eq (name (first (key tbl))) 'key))
     (with-test-db (tbl)
       (assert (= (record-count tbl) 0)))))
 
 (defun record-tests ()
   (test-setup)
   
-  (let-tables ((tbl (key :primary-key? t) val))
+  (let-tables ((tbl (key :key? t) val))
     (with-test-db (tbl)
       (let ((rec (new-record 'key "foo" 'val "bar")))
 	(assert (equal '("foo") (record-key rec tbl)))
@@ -386,7 +386,7 @@
 (defun reload-tests ()
   (test-setup)
   
-  (let-tables ((tbl (key :primary-key? t) val))
+  (let-tables ((tbl (key :key? t) val))
     (with-test-db (tbl)
       (let ((rec (new-record 'key "foo" 'val "bar")))
 	(do-context ()
@@ -399,7 +399,7 @@
 (defun committed-tests ()
   (test-setup)
   
-  (let-tables ((tbl (key :primary-key? t) (val :type number)))
+  (let-tables ((tbl (key :key? t) (val :type number)))
     (with-test-db (tbl)
       (let ((rec (new-record 'key :foo 'val 1)))
 	(do-context ()
