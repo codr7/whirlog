@@ -5,27 +5,24 @@ Whirlog is a basic, single process, multi threaded, log-based relational databas
 The design is based on a [Lisp tutorial](https://github.com/codr7/whirlisp) I wrote, but adds several significant features that allows it to cover more than the simplest cases.
 
 ```
-  (let-tables ((users (username :primary-key? t) password))
-    (with-db (nil users)
-	(let ((rec (new-record 'username "ben_dover"
-			       'password "badum")))
-	  (assert (equal '("ben_dover") (record-key rec users)))
+  (let-tables ((tbl (key :primary-key? t) val))
+    (with-db (nil tbl)
+	(let ((rec (new-record 'key :foo 'val :bar)))
+	  (assert (equal '(:foo) (record-key rec tbl)))
 	  
 	  (do-context ()
-	    (store-record users rec)
-            (assert (string= (column-value (find-record users '("ben_dover")) 'password)
-                             "badum")))
+	    (store-record tbl rec)
+            (assert (string= (column-value (find-record tbl '(:foo)) 'val) :bar)))
 	  
 	  (do-context ()
-            (let ((rec (set-column-values rec 'password "dish")))
-              (store-record users rec))
+            (let ((rec (set-column-values rec 'val :baz)))
+              (store-record tbl rec))
 
-            (assert (string= (column-value (find-record users '("ben_dover")) 'password)
-                             "dish"))))
+            (assert (string= (column-value (find-record tbl '(:foo)) 'val) :baz))))
 	  
 	  (do-context ()
-	    (delete-record users '("ben_dover"))
-	    (assert (null (find-record users '("ben_dover")))))))
+	    (delete-record tbl '(:foo))
+	    (assert (null (find-record tbl '(:foo)))))))
 ```
 
 ### Databases
@@ -35,7 +32,7 @@ Databases are directories containing one log file per table. `with-db` may be us
 Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads. Contexts are committed on success and rolled back on errors by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
 
 ### Tables
-Tables contain stacks of records indexed on their primary keys.
+A table is a persistent, ordered collection of records.
 
 #### Keys
 Each table has a set of columns, some of which form its primary key. Record keys are ordered using `whirlog:column-compare`which defaults to `rb:compare`-ing the values.
@@ -44,13 +41,13 @@ Each table has a set of columns, some of which form its primary key. Record keys
 Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
 
 ```
-("ben_dover")((WHIRLOG::PASSWORD . "badum") (WHIRLOG::USERNAME . "ben_dover"))
-("ben_dover")((WHIRLOG::PASSWORD . "dish") (WHIRLOG::USERNAME . "ben_dover"))
+("ben_dover")((WHIRLOG::KEY . :FOO) (WHIRLOG::VAL . :BAR))
+("ben_dover")((WHIRLOG::KEY . :FOO) (WHIRLOG::KEY . :BAZ))
 ("ben_dover"):D
 ```
 
 #### Versions
-All stored versions (since the last delete) of a record (identified by its primary key) are stacked and indexed per table in RAM. `find-record` takes a `:version`-parameter that allows indexing the stack, `0` being default and most recent.
+All stored versions of a record (as identified by its primary key) are stacked and indexed per table in RAM. `find-record` takes a `:version`-parameter that allows indexing the stack, `0` being default and most recent.
 
 ### Threads
-All threaded table access except for writes (store/delete) has to be protected either by enclosing in `do-sync` or by passing appropriate `:sync?`-arguments. `commit-changes` needs exclusive table access and will eventually fail with an error if it can't acquire a table-specific spinlock implemented using SBCL's atomics.
+All threaded table access except for writes (store/delete) has to be protected either by enclosing in `do-sync` or by passing appropriate `:sync?`-arguments. `commit-changes` needs exclusive table access and will eventually fail with an error if it can't acquire a table-specific spinlock implemented using SBCL atomics.

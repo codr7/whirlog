@@ -1,6 +1,3 @@
-* add record-dirty?
-** compare rec (default context - nil if not exists) to hash
-** use column-compare
 * add thread test
 ** store in same table from multiple threads 
 ** iter key

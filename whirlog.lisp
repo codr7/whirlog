@@ -11,7 +11,7 @@
 	   open-table
 	   primary-key primary-key?
 	   read-records record-count records rollback-changes
-	   set-column-value store-record stored-record
+	   set-column-value store-record committed-record
 	   table table-compare table-records
 	   with-db
 	   tests))
@@ -232,7 +232,7 @@
   "Opens and assigns TBL's file"
   (let ((path (merge-pathnames *path* (string-downcase (trim-path (symbol-name (name tbl)))))))
     (ensure-directories-exist path)
-    (let ((file (open (format nil "~a.tbl" path)
+    (let ((file (open (format nil "~a.lisp" path)
 		      :direction :io
 		      :if-exists :overwrite
 		      :if-does-not-exist :create)))
@@ -321,17 +321,17 @@
 	   (let ((,var ,rec)) ,x)
 	   ,y))))
 
-(defun stored-record (tbl key &key (version 0) (sync? t))
+(defun committed-record (tbl key &key (version 0) (sync? t))
   (nth version (table-records tbl key :sync? sync?)))
 
-(defun (setf stored-record) (rec tbl key &key (version 0) (sync? t))
+(defun (setf committed-record) (rec tbl key &key (version 0) (sync? t))
   (setf (nth version (table-records tbl key :sync? sync?)) rec))
 
 (defun find-record (tbl key &key (version 0) (sync? t))
   "Returns record for KEY in TBL if found, otherwise NIL"
   (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (stored-record tbl key :version version :sync? sync?))))
+			 (committed-record tbl key :version version :sync? sync?))))
     (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
@@ -345,7 +345,7 @@
     (delete-file path)))
 
 (defun test-setup ()
-  (delete-if-exists "/tmp/whirlog/users.tbl"))
+  (delete-if-exists "/tmp/whirlog/tbl.lisp"))
 
 (defmacro with-test-db ((&rest tables) &body body)
   `(with-db ("/tmp/whirlog/" ,@tables) ,@body))
@@ -353,73 +353,71 @@
 (defun table-tests ()
   (test-setup)
   
-  (let-tables ((users (username :primary-key? t) password))
-    (assert (string= (name users) 'users))
-    (assert (= (column-count users) 2))
-    (assert (eq (name (first (primary-key users))) 'username))
-    (with-test-db (users)
-      (assert (= (record-count users) 0)))))
+  (let-tables ((tbl (key :primary-key? t) val))
+    (assert (string= (name tbl) 'tbl))
+    (assert (= (column-count tbl) 2))
+    (assert (eq (name (first (primary-key tbl))) 'key))
+    (with-test-db (tbl)
+      (assert (= (record-count tbl) 0)))))
 
 (defun record-tests ()
   (test-setup)
   
-  (let-tables ((users (username :primary-key? t) password))
-    (with-test-db (users)
-      (let ((rec (new-record 'username "foo"
-			     'password "bar")))
-	(assert (equal '("foo") (record-key rec users)))
+  (let-tables ((tbl (key :primary-key? t) val))
+    (with-test-db (tbl)
+      (let ((rec (new-record 'key "foo" 'val "bar")))
+	(assert (equal '("foo") (record-key rec tbl)))
 	
 	(do-context ()
-	  (store-record users rec)
-          (assert (string= (column-value (find-record users '("foo")) 'password)
+	  (store-record tbl rec)
+          (assert (string= (column-value (find-record tbl '("foo")) 'val)
                            "bar")))
 	
 	(do-context ()
-          (let ((rec (set-column-values rec 'password "baz")))
-            (store-record users rec))
+          (let ((rec (set-column-values rec 'val "baz")))
+            (store-record tbl rec))
 
-          (assert (string= (column-value (find-record users '("foo")) 'password)
-                           "baz"))))
+          (assert (string= (column-value (find-record tbl '("foo")) 'val) "baz"))))
       
       (do-context ()
-	(delete-record users '("foo"))
-	(assert (null (find-record users '("foo"))))))))
+	(delete-record tbl '("foo"))
+	(assert (null (find-record tbl '("foo"))))))))
 
 (defun reload-tests ()
   (test-setup)
   
-  (let-tables ((users (username :primary-key? t) password))
-    (with-test-db (users)
-      (let ((rec (new-record 'username "foo" 'password "bar")))
+  (let-tables ((tbl (key :primary-key? t) val))
+    (with-test-db (tbl)
+      (let ((rec (new-record 'key "foo" 'val "bar")))
 	(do-context ()
-	  (store-record users rec))))
+	  (store-record tbl rec))))
 
-    (with-test-db (users)
+    (with-test-db (tbl)
       (do-context ()
-	(assert (string= (column-value (find-record users '("foo")) 'password) "bar"))))))
+	(assert (string= (column-value (find-record tbl '("foo")) 'val) "bar"))))))
 
-(defun stored-tests ()
+(defun committed-tests ()
   (test-setup)
   
-  (let-tables ((test (key :primary-key? t) (val :type number)))
-    (with-test-db (test)
+  (let-tables ((tbl (key :primary-key? t) (val :type number)))
+    (with-test-db (tbl)
       (let ((rec (new-record 'key :foo 'val 1)))
 	(do-context ()
-	  (store-record test rec))
+	  (store-record tbl rec))
 	(let ((rec (set-column-values rec 'val 2)))
 	  (do-context ()
-	    (store-record test rec))))
-      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) 2))
-      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) 1))
+	    (store-record tbl rec))))
+      (assert (eq (column-value (committed-record tbl '(:foo) :version 0) 'val) 2))
+      (assert (eq (column-value (committed-record tbl '(:foo) :version 1) 'val) 1))
       
-      (setf (column-value (stored-record test '(:foo) :version 1) 'val) 3)
-      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) 3))
+      (setf (column-value (committed-record tbl '(:foo) :version 1) 'val) 3)
+      (assert (eq (column-value (committed-record tbl '(:foo) :version 1) 'val) 3))
 
-      (setf (stored-record test '(:foo) :version 0) (new-record 'key :foo 'val 4))
-      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) 4)))))
+      (setf (committed-record tbl '(:foo) :version 0) (new-record 'key :foo 'val 4))
+      (assert (eq (column-value (committed-record tbl '(:foo) :version 0) 'val) 4)))))
 
 (defun tests ()
   (table-tests)
   (record-tests)
   (reload-tests)
-  (stored-tests))
+  (committed-tests))
