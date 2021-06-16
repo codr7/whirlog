@@ -25,10 +25,10 @@ Whirlog is a minimalistic single process, multi threaded, versioned, log-based r
 ```
 
 ### Databases
-Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a path and open specified tables from there.
+Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a path and open specified tables there.
 
 ### Contexts
-Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads. Contexts are committed on success and rolled back on errors by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
+Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads. Contexts are committed on success and rolled back on error by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
 
 ### Tables
 A table is a persistent, ordered collection of records.
@@ -41,7 +41,7 @@ Records are implemented as immutable lists of pairs, aka. association lists or a
 
 ```
 ("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::VAL . "bar"))
-("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::KEY . "baz"))
+("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::VAL . "baz"))
 ("foo"):D
 ```
 
