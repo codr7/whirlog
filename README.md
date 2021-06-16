@@ -1,7 +1,7 @@
 # ![Lisp Mascot](lisp.png?raw=true) Whirlog
 
 ### Introduction
-Whirlog is a single process, multi threaded, versioned, log-based relational database implemented in Common Lisp.
+Whirlog is a minimalistic single process, multi threaded, versioned, log-based relational database implemented in Common Lisp.
 
 ```
   (let-tables ((tbl (key :primary-key? t) val))
