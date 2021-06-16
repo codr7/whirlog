@@ -7,26 +7,26 @@ The design is based on a [Lisp tutorial](https://github.com/codr7/whirlisp) I wr
 ```
   (let-tables ((tbl (key :primary-key? t) val))
     (with-db (nil tbl)
-	(let ((rec (new-record 'key :foo 'val :bar)))
-	  (assert (equal '(:foo) (record-key rec tbl)))
+	(let ((rec (new-record 'key "foo" 'val "bar")))
+	  (assert (equal '("foo") (record-key rec tbl)))
 	  
 	  (do-context ()
 	    (store-record tbl rec)
-            (assert (string= (column-value (find-record tbl '(:foo)) 'val) :bar)))
+            (assert (string= (column-value (find-record tbl '("foo")) 'val) "bar")))
 	  
 	  (do-context ()
-            (let ((rec (set-column-values rec 'val :baz)))
+            (let ((rec (set-column-values rec 'val "baz")))
               (store-record tbl rec))
 
-            (assert (string= (column-value (find-record tbl '(:foo)) 'val) :baz))))
+            (assert (string= (column-value (find-record tbl '("foo")) 'val) "baz"))))
 	  
 	  (do-context ()
-	    (delete-record tbl '(:foo))
-	    (assert (null (find-record tbl '(:foo)))))))
+	    (delete-record tbl '("foo"))
+	    (assert (null (find-record tbl '("foo")))))))
 ```
 
 ### Databases
-Databases are directories containing one log file per table. `with-db` may be used to (optionally) indicate a path and open specified tables from there.
+Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a path and open specified tables from there.
 
 ### Contexts
 Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads. Contexts are committed on success and rolled back on errors by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
@@ -41,9 +41,9 @@ Each table has a set of columns, some of which form its primary key. Record keys
 Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
 
 ```
-("ben_dover")((WHIRLOG::KEY . :FOO) (WHIRLOG::VAL . :BAR))
-("ben_dover")((WHIRLOG::KEY . :FOO) (WHIRLOG::KEY . :BAZ))
-("ben_dover"):D
+("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::VAL . "bar"))
+("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::KEY . "baz"))
+("foo"):D
 ```
 
 #### Versions
