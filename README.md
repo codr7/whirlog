@@ -38,7 +38,7 @@ Contexts are completely independent, atomic transactions. Feel free to start as 
 Tables contain stacks of records indexed on their primary keys.
 
 #### Keys
-Each table has a set of columns, some of which form its primary key. Record keys are ordered using `rb:compare`.
+Each table has a set of columns, some of which form its primary key. Record keys are ordered using `whirlog:column-compare`which defaults to `rb:compare`-ing the values.
 
 ### Records
 Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
@@ -50,7 +50,7 @@ Records are implemented as immutable lists of pairs, aka. association lists or a
 ```
 
 #### Versions
-All stored versions (since the last delete) of a record (identified by its primary key) are stacked and indexed per table in RAM. `find-record` takes a separate `:version`-parameter that allows indexing in reverse order, `0` being the default /  most recent version; `NIL` is returned once you hit the end.
+All stored versions (since the last delete) of a record (identified by its primary key) are stacked and indexed per table in RAM. `find-record` takes a `:version`-parameter that allows indexing the stack, `0` being default and most recent.
 
 ### Threads
 All threaded table access except for writes (store/delete) has to be protected either by enclosing in `do-sync` or by passing appropriate `:sync?`-arguments. `commit-changes` needs exclusive table access and will eventually fail with an error if it can't acquire a table-specific spinlock implemented using SBCL's atomics.

@@ -2,7 +2,7 @@
   (:use cl)
   (:import-from sb-ext compare-and-swap)
   (:import-from sb-thread thread-yield)
-  (:import-from util dohash get-kw sym)
+  (:import-from util dohash let-kw sym)
   (:export close-table column column-compare column-count column-value columns commit context
 	   delete-record do-context do-records do-sync
 	   file find-record
@@ -158,6 +158,15 @@
   "Returns value for COL in REC"
   (rest (assoc col rec)))
 
+(defclass number-column (column)
+  ())
+
+(defmethod column-compare ((col number-column) x y)
+  (cond
+    ((< x y) :lt)
+    ((> x y) :gt)
+    (t :eq)))
+
 (defclass table ()
   ((name :initarg :name
          :reader name)
@@ -181,7 +190,7 @@
 (defmethod column-compare ((col column) x y)
   (rb:compare x y))
 
-(defmethod table-compare ((tbl table) x y)
+(defun table-compare (tbl x y)
   (labels ((rec (cols)
 	     (if cols
 		 (let ((res (column-compare (first cols) x y)))
@@ -285,23 +294,20 @@
 	    (progn ,@body)
 	 (dolist (,$tbl ,$tbls)
 	   (close-table ,$tbl))))))
-   
+
 (defmacro let-tables ((&rest tables) &body body)
-  (let ((ct (gensym)))
-    (labels ((bind (name &rest cols)
-	       `(,name (new-table ',name
-				  ,@(mapcar (lambda (c)
-					      (if (listp c)
-						  `(let ((,ct ,(get-kw :type c)))
-						     (if ,ct
-							 (apply (fdefinition (sym 'new- ,ct '-column))
-								',(first c)
-								,@(rest c))
-							 (new-column ',(first c) ,@(rest c))))
-						  `(new-column ',c)))
-					    cols)))))
-      `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
-	 ,@body))))
+  (labels ((bind (name &rest cols)
+	     `(,name (new-table ',name
+				,@(mapcar (lambda (c)
+					    (if (listp c)
+						(let-kw (c (ct :type))
+						  `(make-instance ',(if ct (sym ct '-column) 'column)
+								  :name ',(first c)
+								  ,@(rest c)))
+						`(make-instance 'column :name ',c)))
+					  cols)))))
+    `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
+       ,@body)))
 
 (defun store-record (tbl rec)
   "Stores REC in TBL"
@@ -395,22 +401,22 @@
 (defun stored-tests ()
   (test-setup)
   
-  (let-tables ((test (key :primary-key? t) val))
+  (let-tables ((test (key :primary-key? t) (val :type number)))
     (with-test-db (test)
-      (let ((rec (new-record 'key :foo 'val :bar)))
+      (let ((rec (new-record 'key :foo 'val 1)))
 	(do-context ()
 	  (store-record test rec))
-	(let ((rec (set-column-values rec 'val :baz)))
+	(let ((rec (set-column-values rec 'val 2)))
 	  (do-context ()
 	    (store-record test rec))))
-      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) :baz))
-      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) :bar))
+      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) 2))
+      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) 1))
       
-      (setf (column-value (stored-record test '(:foo) :version 1) 'val) :qux)
-      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) :qux))
+      (setf (column-value (stored-record test '(:foo) :version 1) 'val) 3)
+      (assert (eq (column-value (stored-record test '(:foo) :version 1) 'val) 3))
 
-      (setf (stored-record test '(:foo) :version 0) (new-record 'key :foo 'val :bar))
-      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) :bar)))))
+      (setf (stored-record test '(:foo) :version 0) (new-record 'key :foo 'val 4))
+      (assert (eq (column-value (stored-record test '(:foo) :version 0) 'val) 4)))))
 
 (defun tests ()
   (table-tests)
