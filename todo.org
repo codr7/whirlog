@@ -1,6 +1,3 @@
-* add offsets
-** typecase
-** readme
 * add thread test
 ** store in same table from multiple threads 
 ** iter key

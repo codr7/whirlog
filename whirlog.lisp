@@ -212,21 +212,8 @@
   "Returns T if X is EOF"
   (eq x *eof*))
 
-(defun read-records (tbl in &key (sync? t))
+(defun read-records (tbl in &key (lazy? t) (sync? t))
   "Reads records from IN into TBL"
-  (with-slots (records) tbl
-    (let ((key (read-value in)))
-      (unless (eof? key)
-        (let ((rec (read-value in)))
-          (when (eof? rec)
-  	    (error "Missing record for key ~a" key))
-	  (if (delete? rec)
-	      (setf (table-records tbl key :sync? sync?) nil)
-              (push rec (table-records tbl key :sync? sync?)))
-          (read-records tbl in))))))
-
-(defun read-offsets (tbl in &key (sync? t))
-  "Reads offsets from IN into TBL"
   (with-slots (records) tbl
     (let ((key (read-value in)))
       (unless (eof? key)
@@ -237,13 +224,13 @@
   	    (error "Missing record for key ~a" key))
 	  (if (delete? rec)
 	      (setf (table-records tbl key :sync? sync?) nil)
-              (push pos (table-records tbl key :sync? sync?)))
-          (read-offsets tbl in))))))
+              (push (if lazy? pos rec) (table-records tbl key :sync? sync?)))
+          (read-records tbl in))))))
 
 (defun trim-path (in)
   (string-trim "*" in))
 
-(defun open-table (tbl)
+(defun open-table (tbl &key (lazy? t))
   "Opens and assigns TBL's file"
   (let ((path (merge-pathnames *path* (string-downcase (trim-path (symbol-name (name tbl)))))))
     (ensure-directories-exist path)
@@ -252,7 +239,7 @@
 		      :if-exists :overwrite
 		      :if-does-not-exist :create)))
       (setf (slot-value tbl 'file) file)
-      (read-offsets tbl file))))
+      (read-records tbl file :lazy? lazy?))))
 
 (defun close-table (tbl)
   "Closes and unbinds TBL's file"
@@ -298,13 +285,13 @@
             (column-value rec (name c)))
           (key tbl)))
 
-(defmacro with-db ((path &rest tbls) &body body)
+(defmacro with-db ((path (&rest tbls) &key (lazy? t)) &body body)
   (let (($tbl (gensym))
 	($tbls (gensym)))
     `(let ((,$tbls (list ,@tbls))
 	   (*path* (merge-pathnames *path* ,(or path #P""))))
        (dolist (,$tbl ,$tbls)
-	 (open-table ,$tbl))
+	 (open-table ,$tbl :lazy? ,lazy?))
        (unwind-protect
 	    (progn ,@body)
 	 (dolist (,$tbl ,$tbls)
@@ -377,7 +364,7 @@
   (delete-if-exists "/tmp/whirlog/tbl.lisp"))
 
 (defmacro with-test-db ((&rest tables) &body body)
-  `(with-db ("/tmp/whirlog/" ,@tables) ,@body))
+  `(with-db ("/tmp/whirlog/" (,@tables)) ,@body))
 
 (defun table-tests ()
   (test-setup)
