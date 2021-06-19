@@ -144,8 +144,8 @@
   ((name :initarg :name
          :reader name)
    (key? :initarg :key?
-		 :initform nil
-                 :reader key?)))
+	 :initform nil
+         :reader key?)))
 
 (defun new-column (name &rest opts)
   "Returns new columns for NAME and OPTS"
@@ -173,7 +173,7 @@
    (busy? :initform nil
 	  :reader busy?)
    (key :initarg :key
-		:reader key)	 
+	:reader key)	 
    (columns :initarg :columns
             :reader columns)
    (file :initarg :file
@@ -225,6 +225,21 @@
               (push rec (table-records tbl key :sync? sync?)))
           (read-records tbl in))))))
 
+(defun read-offsets (tbl in &key (sync? t))
+  "Reads offsets from IN into TBL"
+  (with-slots (records) tbl
+    (let ((key (read-value in)))
+      (unless (eof? key)
+	
+        (let ((pos (file-position in))
+	      (rec (read-value in)))
+          (when (eof? rec)
+  	    (error "Missing record for key ~a" key))
+	  (if (delete? rec)
+	      (setf (table-records tbl key :sync? sync?) nil)
+              (push pos (table-records tbl key :sync? sync?)))
+          (read-offsets tbl in))))))
+
 (defun trim-path (in)
   (string-trim "*" in))
 
@@ -237,7 +252,7 @@
 		      :if-exists :overwrite
 		      :if-does-not-exist :create)))
       (setf (slot-value tbl 'file) file)
-      (read-records tbl file))))
+      (read-offsets tbl file))))
 
 (defun close-table (tbl)
   "Closes and unbinds TBL's file"
@@ -322,7 +337,21 @@
 	   ,y))))
 
 (defun committed-record (tbl key &key (version 0) (sync? t))
-  (nth version (table-records tbl key :sync? sync?)))
+  (flet ((get-rec ()
+	   (let ((pos-or-rec (nth version (table-records tbl key :sync? nil))))
+	     (typecase pos-or-rec
+	       (integer
+		(let ((in (file tbl)))
+		  (file-position in pos-or-rec)
+
+		  (let ((rec (read-value in)))
+		    (setf (committed-record tbl key :version version :sync? nil) rec)
+		    rec)))
+	       (t pos-or-rec)))))
+    (if sync?
+	(do-sync (tbl)
+	  (get-rec))
+	(get-rec))))
 
 (defun (setf committed-record) (rec tbl key &key (version 0) (sync? t))
   (setf (nth version (table-records tbl key :sync? sync?)) rec))

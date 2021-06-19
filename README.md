@@ -28,10 +28,10 @@ Whirlog is a minimalistic single process, multi threaded, versioned, log-based r
 Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a path and open specified tables there.
 
 ### Contexts
-Contexts are completely independent, atomic transactions. Feel free to start as many as you like, nested, and/or in parallel threads. Contexts are committed on success and rolled back on error by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
+Contexts are independent atomic transactions. Changes are committed on success and rolled back on error by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
 
 ### Tables
-A table is a persistent, ordered collection of records.
+A table is a persistent, ordered tree of records.
 
 #### Keys
 Each table has a set of columns, some of which form its primary key. Record keys are ordered using `whirlog:column-compare`which defaults to `rb:compare`-ing the values.
@@ -46,7 +46,7 @@ Records are implemented as immutable lists of pairs, aka. association lists or a
 ```
 
 #### Versions
-All stored versions of a record (as identified by its primary key) are stacked and indexed per table in RAM. `find-record` takes a `:version`-parameter that allows indexing the stack, `0` being default and most recent.
+Each logged version of a record (as identified by its key) is available on demand.
 
 ### Threads
-All threaded table access except for writes (store/delete) has to be protected either by enclosing in `do-sync` or by passing appropriate `:sync?`-arguments. `commit-changes` needs exclusive table access and will eventually fail with an error if it can't acquire a table-specific spinlock implemented using SBCL atomics.
+All threaded table access has to be protected either by enclosing in `do-sync` or leaving `:sync?`-argument defaults. Calls that require exclusive table access will eventually fail with an error unless they're able to acquire a table specific spinlock implemented using SBCL atomics.
