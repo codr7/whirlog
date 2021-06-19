@@ -25,19 +25,20 @@ Whirlog is a minimalistic single process, mt capable, versioned, log structured 
 ```
 
 ### Databases
-Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a path and open specified tables there.
+Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a root path and open/close specified tables.
 
 ### Contexts
 Contexts are independent atomic transactions. Changes are committed on success and rolled back on error by default, but the behavior may be customized by manually calling `commit-changes` and/or `rollback-changes` as needed.
 
 ### Tables
-A table is a persistent, ordered tree of records.
+Tables are implemented as persistent, ordered trees of lazy loaded records.
+Each table has a set of columns and a key.
 
 #### Keys
-Each table has a set of columns, some of which form its primary key. Record keys are ordered using `whirlog:column-compare`which defaults to `rb:compare`-ing the values.
+Keys are compared using `whirlog:column-compare` which defaults to `rb:compare`-ing values.
 
 ### Records
-Records are implemented as immutable lists of pairs, aka. association lists or alists; and written as is to disk. This means that any readable/writeable value will do as field value, and that table logs are human readable as well as easy to process programatically.
+Records are implemented as immutable lists of pairs (or alists); and written as is to disk. This means that any readable/writeable value will do as field value, and that log files are human readable as well as trivial to process.
 
 ```
 ("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::VAL . "bar"))
