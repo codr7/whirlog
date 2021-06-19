@@ -49,4 +49,4 @@ Records are implemented as immutable lists of pairs, aka. association lists or a
 Each logged version of a record (as identified by its key) is available on demand.
 
 ### Threads
-Threaded table access has to be protected either by enclosing in `do-sync` or leaving `:sync?`-argument defaulted. Calls that require exclusive table access will eventually fail with an error unless they're able to acquire a table specific spinlock implemented using SBCL atomics.
+Threaded table access has to be protected either by enclosing in `do-sync` or passing `:sync? t` (which is the default) where appropriate. Calls that require exclusive table access will eventually fail with an error unless they're able to acquire a table specific spinlock implemented using SBCL atomics.
