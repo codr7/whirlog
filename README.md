@@ -35,7 +35,7 @@ Tables are implemented as persistent, ordered trees of lazy loaded records.
 Each table has a set of columns and a key.
 
 #### Keys
-Keys are compared using `whirlog:column-compare` which defaults to `rb:compare`-ing values.
+Keys are compared using `whirlog:compare-column` which defaults to `rb:compare`.
 
 ### Records
 Records are implemented as immutable lists of pairs (or alists); and written as is to disk. This means that any readable/writeable value will do as field value, and that log files are human readable as well as trivial to process.

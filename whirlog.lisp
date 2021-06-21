@@ -3,16 +3,18 @@
   (:import-from sb-ext compare-and-swap)
   (:import-from sb-thread thread-yield)
   (:import-from util dohash let-kw sym)
-  (:export close-table column column-compare column-count column-value columns commit committed-record context
-	   delete-record do-context do-records do-sync
+  (:export close-table column compare-column column-count column-value columns commit committed-record context
+	   decode-column decode-record delete-record do-context do-records do-sync
+	   encode-column encode-record
 	   file find-record
+	   init-column init-record
 	   key key?
 	   let-tables
-	   name new-column new-context new-table
+	   name new-column new-context new-table number-column
 	   open-table
-	   read-records record-count records rollback-changes
-	   set-column-value store-record
-	   table table-compare table-records
+	   read-records compare-record record-count records rollback-changes
+	   set-column-value store-record string-column
+	   table table-records
 	   with-db
 	   tests))
 
@@ -100,7 +102,7 @@
 	     (check ()
 	       (dohash ((tbl . key) rec *context*)
 		 (let ((trec (find-table-record tbl key)))
-		   (unless (or (eq rec *delete*) (equal trec rec))
+		   (unless (or (eq rec *delete*) (eq (compare-record tbl trec rec) :eq))
 		     (if (zerop retries)
 			 (error "Commit failed: ~a ~a" trec rec) 
 			 (undo))
@@ -158,13 +160,35 @@
   "Returns value for COL in REC"
   (rest (assoc col rec)))
 
+(defun (setf column-value) (val rec col)
+  "Sets value for COL in REC to VAL"
+  (setf (rest (assoc col rec)) val))
+
+(defmethod init-column ((col column) rec)
+  rec)
+
+(defmethod encode-column ((col column) val)
+  val)
+
+(defmethod decode-column ((col column) val)
+  val)
+
 (defclass number-column (column)
   ())
 
-(defmethod column-compare ((col number-column) x y)
+(defmethod compare-column ((col number-column) x y)
   (cond
     ((< x y) :lt)
     ((> x y) :gt)
+    (t :eq)))
+
+(defclass string-column (column)
+  ())
+
+(defmethod compare-column ((col string-column) x y)  
+  (cond
+    ((string< x y) :lt)
+    ((string> x y) :gt)
     (t :eq)))
 
 (defclass table ()
@@ -187,22 +211,43 @@
 		 :key (remove-if-not #'key? cols)
                  :columns cols))
 
-(defmethod column-compare ((col column) x y)
+(defmethod compare-column ((col column) x y)
   (rb:compare x y))
 
-(defun table-compare (tbl x y)
+(defun compare-record (tbl x y)
   (labels ((rec (cols)
 	     (if cols
-		 (let ((res (column-compare (first cols) x y)))
+		 (let ((res (compare-column (first cols) x y)))
 		   (if (eq res :eq)
 		       (rec (rest cols))
 		       res))
 		 :eq)))
     (rec (key tbl))))
 
+(defun init-record (tbl rec)
+  (reduce (lambda (in col) (init-column col in)) (columns tbl) :initial-value rec))
+
+(defun encode-record (tbl in)
+  (let ((out (new-record)))
+    (dolist (c (columns tbl))
+      (let* ((cn (name c))
+	     (v (column-value in cn)))
+	(when v
+	  (push (cons cn (encode-column c v)) out))))
+    out))
+
+(defun decode-record (tbl in)
+  (let ((out (new-record)))
+    (dolist (c (columns tbl))
+      (let* ((cn (name c))
+	     (v (column-value in cn)))
+	(when v
+	  (push (cons cn (decode-column c v)) out))))
+    out))
+
 (defmethod initialize-instance :after ((tbl table) &rest args &key &allow-other-keys)
   (declare (ignore args))
-  (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y) (table-compare tbl x y)))))
+  (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y) (compare-record tbl x y)))))
 
 (defun read-value (in)
   "Reads value from IN"
@@ -261,10 +306,6 @@
        (let ((,rec (first ,$recs)))
 	 ,@body))))
 
-(defun (setf column-value) (val rec col)
-  "Sets value for COL in REC to VAL"
-  (setf (rest (assoc col rec)) val))
-
 (defun set-column-values (rec &rest flds)
   "Returns REC with updated FLDS"
   (labels ((acc (in out)
@@ -314,7 +355,7 @@
 (defun store-record (tbl rec)
   "Stores REC in TBL"
   (let ((rec (remove-duplicates rec :key #'first :from-end t)))
-    (push-change tbl (record-key rec tbl) rec)))
+    (push-change tbl (record-key rec tbl) (encode-record tbl rec))))
 
 (defmacro if-changed ((tbl key var) x y)
   (let ((rec (gensym)))
@@ -347,7 +388,7 @@
   "Returns record for KEY in TBL if found, otherwise NIL"
   (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (committed-record tbl key :version version :sync? sync?))))
+			 (decode-record tbl (committed-record tbl key :version version :sync? sync?)))))
     (unless (delete? rec) rec)))
 
 (defun delete-record (tbl key)
@@ -425,7 +466,7 @@
 	    (store-record tbl rec))))
       (assert (eq (column-value (committed-record tbl '(:foo) :version 0) 'val) 2))
       (assert (eq (column-value (committed-record tbl '(:foo) :version 1) 'val) 1))
-      
+
       (setf (column-value (committed-record tbl '(:foo) :version 1) 'val) 3)
       (assert (eq (column-value (committed-record tbl '(:foo) :version 1) 'val) 3))
 
