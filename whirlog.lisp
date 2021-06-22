@@ -257,20 +257,26 @@
 
 (defun encode-record (tbl in)
   (let ((out (new-record)))
-    (dolist (c (columns tbl))
+    (dolist (c (remove-if #'key? (columns tbl)))
       (let* ((cn (name c))
 	     (v (column-value in cn)))
 	(when v
 	  (push (cons cn (encode-column c v)) out))))
     out))
 
-(defun decode-record (tbl in)
+(defun decode-record (tbl key in)
   (let ((out (new-record)))
+    (let ((kcs (key tbl)))
+      (dotimes (i (length kcs))
+	(let ((c (aref kcs i)))
+	  (push (cons (name c) (decode-column c (aref key i))) out))))
+					
     (dolist (c (columns tbl))
       (let* ((cn (name c))
 	     (v (column-value in cn)))
 	(when v
 	  (push (cons cn (decode-column c v)) out))))
+    
     out))
 
 (defun compare-key (tbl x y)
@@ -281,6 +287,14 @@
 	(:gt (return-from compare-key :gt))
 	(:eq))))
   :eq)
+
+(defun encode-key (tbl in)
+  (let* ((cols (key tbl))
+	 (max (length cols))
+	 (out (make-array max)))
+    (dotimes (i max)
+      (setf (aref out i) (encode-column (aref cols i) (aref in i))))
+    out))
 
 (defmethod initialize-instance :after ((tbl table) &rest args &key &allow-other-keys)
   (declare (ignore args))
@@ -395,7 +409,7 @@
 
 (defun store-record (tbl rec)
   "Stores REC in TBL"
-  (setf (get-change tbl (record-key tbl rec)) (encode-record tbl rec)))
+  (setf (get-change tbl (encode-key tbl (record-key tbl rec))) (encode-record tbl rec)))
 
 (defmacro if-changed ((tbl key var) x y)
   (let ((rec (gensym)))
@@ -424,18 +438,22 @@
 (defun (setf committed-record) (rec tbl key &key (version 0) (sync? t))
   (setf (nth version (table-records tbl key :sync? sync?)) rec))
 
-(defun find-record (tbl key &key (version 0) (sync? t))
+(defun find-record-encoded (tbl key &key (version 0) (sync? t))
   "Returns record for KEY in TBL if found, otherwise NIL"
-  (let ((rec (if-changed (tbl (encode-key tbl key) rec)
+  (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (decode-record tbl (committed-record tbl key :version version :sync? sync?)))))
+			 (decode-record tbl key (committed-record tbl key :version version :sync? sync?)))))
     (unless (delete? rec) rec)))
 
-(defun delete-record (tbl key)
+(defun find-record (tbl key &key (version 0) (sync? t))
+  (find-record-encoded tbl (encode-key tbl key) :version version :sync? sync?))
+
+(defun delete-record (tbl key &key (sync? t))
   "Deletes REC from TBL"
-  (unless (find-record tbl key)
-    (error "Record not found: ~a ~a" (name tbl) key))
-  (setf (get-change tbl (encode-key key)) *delete*))
+  (let ((k (encode-key tbl key)))
+    (unless (find-record-encoded tbl k :sync? sync?)
+      (error "Record not found: ~a ~a" (name tbl) key))
+    (setf (get-change tbl k) *delete*)))
 
 (defun delete-if-exists (path)
   (when (probe-file path)

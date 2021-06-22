@@ -5,7 +5,7 @@ Whirlog is a minimalistic single process, mt capable, versioned, log structured 
 
 ```
   (let-tables ((tbl (key :key? t) val))
-    (with-db (nil (tbl))
+    (with-db ("/tmp/db/" (tbl))
 	(let ((rec (new-record 'key "foo" 'val "bar")))
 	  (do-context ()
 	    (store-record tbl rec)
@@ -39,9 +39,9 @@ Keys are compared using `whirlog:compare-column` which defaults to `rb:compare`.
 Records are implemented as immutable lists of pairs (or alists); and written as is to disk. This means that any readable/writeable value will do as field value, and that log files are human readable as well as trivial to process.
 
 ```
-("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::VAL . "bar"))
-("foo")((WHIRLOG::KEY . "foo") (WHIRLOG::VAL . "baz"))
-("foo"):D
+#("foo")((WHIRLOG::VAL . "bar"))
+#("foo")((WHIRLOG::VAL . "baz"))
+#("foo"):D
 ```
 
 #### Versioning
