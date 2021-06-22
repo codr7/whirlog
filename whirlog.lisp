@@ -2,8 +2,9 @@
   (:use cl)
   (:import-from sb-ext compare-and-swap)
   (:import-from sb-thread thread-yield)
-  (:import-from util dohash let-kw sym)
-  (:export close-table column compare-column column-count column-value columns commit committed-record context
+  (:import-from util let-kw sym)
+  (:export close-table column column-count column-value columns commit committed-record compare-column compare-key
+	   compare-record context
 	   decode-column decode-record delete-record do-context do-records do-sync
 	   encode-column encode-record
 	   file find-record
@@ -12,7 +13,7 @@
 	   let-tables
 	   name new-column new-context new-table number-column
 	   open-table
-	   read-records compare-record record-count records rollback-changes
+	   read-records record-count records rollback-changes
 	   set-column-value store-record string-column
 	   table table-records
 	   with-db
@@ -28,11 +29,20 @@
 
 (defun new-context ()
   "Returns a fresh context"
-  (make-hash-table :test 'equal))
+  (rb:new-root :compare (lambda (x y)
+			  (let* ((tbl (first x))
+				 (res (rb:compare (name tbl) (name (first y)))))
+			    (if (eq res :eq)
+				(compare-key tbl (rest x) (rest y))
+				res)))))
 
-(defun push-change (tbl key rec)
-  "Pushes change for REC with KEY in TBL"
-  (setf (gethash (cons tbl key) *context*) rec))
+(defun get-change (tbl key)
+  "Gets change for KEY in TBL"
+  (rb:get-node (cons tbl key) *context*))
+
+(defun (setf get-change) (rec tbl key)
+  "Sets change to REC for KEY in TBL"
+  (setf (rb:get-node (cons tbl key) *context*) rec))
 
 (defun delete? (rec)
   "Returns T if REC is a delete"
@@ -44,7 +54,7 @@
 
 (defun rollback-changes ()
   "Rolls back changes in current context"
-  (clrhash *context*))
+  (rb:clear *context*))
 
 (defmacro do-sync ((tbl &optional slots) &body body)
   `(with-slots (busy? ,@slots) ,tbl
@@ -100,7 +110,7 @@
 	       (setf done nil)
 	       nil)
 	     (check ()
-	       (dohash ((tbl . key) rec *context*)
+	       (rb:do-tree ((tbl . key) rec (rb:root-node *context*))
 		 (let ((trec (find-table-record tbl key)))
 		   (unless (or (eq rec *delete*) (eq (compare-record tbl trec rec) :eq))
 		     (if (zerop retries)
@@ -110,7 +120,7 @@
 	       t))
       (handler-case
 	  (progn 
-	    (dohash ((tbl . key) rec *context*)
+	    (rb:do-tree ((tbl . key) rec (rb:root-node *context*))
 	      (do-sync (tbl (file records))
 		(write-value file key)
 		(write-value file rec)
@@ -206,23 +216,41 @@
 
 (defun new-table (name &rest cols)
   "Returns new table with NAME and COLS"
-  (make-instance 'table
-                 :name name
-		 :key (remove-if-not #'key? cols)
-                 :columns cols))
+  (let ((k (remove-if-not #'key? cols)))
+    (make-instance 'table
+                   :name name
+		   :key (make-array (length k) :element-type 'column :initial-contents k)
+		   :columns cols)))
 
 (defmethod compare-column ((col column) x y)
   (rb:compare x y))
 
-(defun compare-record (tbl x y)
-  (labels ((rec (cols)
-	     (if cols
-		 (let ((res (compare-column (first cols) x y)))
-		   (if (eq res :eq)
-		       (rec (rest cols))
-		       res))
-		 :eq)))
-    (rec (key tbl))))
+(defun compare-record (tbl xs ys)
+  (cond
+    ((and (null xs) ys)
+     (return-from compare-record :lt))
+    ((and xs (null ys))
+     (return-from compare-record :gt))
+    ((null xs)
+     (return-from compare-record :eq)))
+
+  (dolist (c (columns tbl))
+    (let ((x (column-value xs c))
+	  (y (column-value ys c)))
+      (cond
+	((and (null x) y)
+	 (return-from compare-record :lt))
+	((and x (null y))
+	 (return-from compare-record :gt))
+	((null x)
+	 (return-from compare-record :eq)))
+      
+      (ecase (compare-column c x y)
+	(:lt (return-from compare-record :lt))
+	(:gt (return-from compare-record :gt))
+	(:eq))))
+  
+  :eq)
 
 (defun init-record (tbl rec)
   (reduce (lambda (in col) (init-column col in)) (columns tbl) :initial-value rec))
@@ -245,9 +273,19 @@
 	  (push (cons cn (decode-column c v)) out))))
     out))
 
+(defun compare-key (tbl x y)
+  (let ((k (key tbl)))
+    (dotimes (i (length k))
+      (ecase (compare-column (aref k i) (aref x i) (aref y i))
+	(:lt (return-from compare-key :lt))
+	(:gt (return-from compare-key :gt))
+	(:eq))))
+  :eq)
+
 (defmethod initialize-instance :after ((tbl table) &rest args &key &allow-other-keys)
   (declare (ignore args))
-  (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y) (compare-record tbl x y)))))
+  (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y)
+							  (compare-key tbl x y)))))
 
 (defun read-value (in)
   "Reads value from IN"
@@ -320,11 +358,14 @@
   "Returns new record with FLDS"
   (apply #'set-column-values nil flds))
 
-(defun record-key (rec tbl)
+(defun record-key (tbl rec)
   "Returns key for REC in TBL"
-  (mapcar (lambda (c)
-            (column-value rec (name c)))
-          (key tbl)))
+  (let ((k (key tbl)))
+    (make-array (length k)
+		:initial-contents (map 'list
+				       (lambda (c)
+					 (column-value rec (name c)))
+				       k))))
 
 (defmacro with-db ((path (&rest tbls) &key (lazy? t)) &body body)
   (let (($tbl (gensym))
@@ -354,12 +395,11 @@
 
 (defun store-record (tbl rec)
   "Stores REC in TBL"
-  (let ((rec (remove-duplicates rec :key #'first :from-end t)))
-    (push-change tbl (record-key rec tbl) (encode-record tbl rec))))
+  (setf (get-change tbl (record-key tbl rec)) (encode-record tbl rec)))
 
 (defmacro if-changed ((tbl key var) x y)
   (let ((rec (gensym)))
-    `(let ((,rec (gethash (cons ,tbl ,key) *context*)))
+    `(let ((,rec (get-change ,tbl ,key)))
        (if ,rec
 	   (let ((,var ,rec)) ,x)
 	   ,y))))
@@ -395,7 +435,7 @@
   "Deletes REC from TBL"
   (unless (find-record tbl key)
     (error "Record not found: ~a ~a" (name tbl) key))
-  (push-change tbl key *delete*))
+  (setf (get-change tbl key) *delete*))
 
 (defun delete-if-exists (path)
   (when (probe-file path)
@@ -413,7 +453,7 @@
   (let-tables ((tbl (key :key? t) val))
     (assert (string= (name tbl) 'tbl))
     (assert (= (column-count tbl) 2))
-    (assert (eq (name (first (key tbl))) 'key))
+    (assert (eq (name (aref (key tbl) 0)) 'key))
     (with-test-db (tbl)
       (assert (= (record-count tbl) 0)))))
 
@@ -423,22 +463,23 @@
   (let-tables ((tbl (key :key? t) val))
     (with-test-db (tbl)
       (let ((rec (new-record 'key "foo" 'val "bar")))
-	(assert (equal '("foo") (record-key rec tbl)))
+	(assert (equalp #("foo") (record-key tbl rec)))
+	
 	
 	(do-context ()
 	  (store-record tbl rec)
-          (assert (string= (column-value (find-record tbl '("foo")) 'val)
+          (assert (string= (column-value (find-record tbl #("foo")) 'val)
                            "bar")))
-	
+
 	(do-context ()
           (let ((rec (set-column-values rec 'val "baz")))
             (store-record tbl rec))
 
-          (assert (string= (column-value (find-record tbl '("foo")) 'val) "baz"))))
+          (assert (string= (column-value (find-record tbl #("foo")) 'val) "baz"))))
       
       (do-context ()
-	(delete-record tbl '("foo"))
-	(assert (null (find-record tbl '("foo"))))))))
+	(delete-record tbl #("foo"))
+	(assert (null (find-record tbl #("foo"))))))))
 
 (defun reload-tests ()
   (test-setup)
@@ -451,7 +492,7 @@
 
     (with-test-db (tbl)
       (do-context ()
-	(assert (string= (column-value (find-record tbl '("foo")) 'val) "bar"))))))
+	(assert (string= (column-value (find-record tbl #("foo")) 'val) "bar"))))))
 
 (defun committed-tests ()
   (test-setup)
@@ -464,14 +505,15 @@
 	(let ((rec (set-column-values rec 'val 2)))
 	  (do-context ()
 	    (store-record tbl rec))))
-      (assert (eq (column-value (committed-record tbl '(:foo) :version 0) 'val) 2))
-      (assert (eq (column-value (committed-record tbl '(:foo) :version 1) 'val) 1))
 
-      (setf (column-value (committed-record tbl '(:foo) :version 1) 'val) 3)
-      (assert (eq (column-value (committed-record tbl '(:foo) :version 1) 'val) 3))
+      (assert (eq (column-value (committed-record tbl #(:foo) :version 0) 'val) 2))
+      (assert (eq (column-value (committed-record tbl #(:foo) :version 1) 'val) 1))
 
-      (setf (committed-record tbl '(:foo) :version 0) (new-record 'key :foo 'val 4))
-      (assert (eq (column-value (committed-record tbl '(:foo) :version 0) 'val) 4)))))
+      (setf (column-value (committed-record tbl #(:foo) :version 1) 'val) 3)
+      (assert (eq (column-value (committed-record tbl #(:foo) :version 1) 'val) 3))
+
+      (setf (committed-record tbl #(:foo) :version 0) (new-record 'key :foo 'val 4))
+      (assert (eq (column-value (committed-record tbl #(:foo) :version 0) 'val) 4)))))
 
 (defun tests ()
   (table-tests)

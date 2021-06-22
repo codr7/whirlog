@@ -63,9 +63,9 @@
 	      (go next))))
        
        (dolist (,$node ,$done)
-	 (let ((,key (node-key ,$node))
-	       (,val (node-value ,$node)))
-	   ,@body)))))
+	 (destructuring-bind ,key (node-key ,$node)
+	   (let ((,val (node-value ,$node)))
+	       ,@body))))))
 
 (defstruct node
   (key nil :type t)
