@@ -38,11 +38,11 @@
 
 (defun get-change (tbl key)
   "Gets change for KEY in TBL"
-  (rb:get-node (cons tbl key) *context*))
+  (rb:get-node *context* (cons tbl key)))
 
 (defun (setf get-change) (rec tbl key)
   "Sets change to REC for KEY in TBL"
-  (setf (rb:get-node (cons tbl key) *context*) rec))
+  (setf (rb:get-node *context* (cons tbl key)) rec))
 
 (defun delete? (rec)
   "Returns T if REC is a delete"
@@ -76,15 +76,15 @@
   "Returns stack of records for KEY in TBL"
   (with-slots (records) tbl
     (if sync?
-	(do-sync (tbl) (rb:get-node key records))
-	(rb:get-node key records))))
+	(do-sync (tbl) (rb:get-node records key))
+	(rb:get-node records key))))
 
 (defun (setf table-records) (val tbl key &key (sync? t))
   "Sets stack of records for KEY in TBL to VAL"
   (with-slots (records) tbl
     (if sync?
-	(do-sync (tbl) (setf (rb:get-node key records) val))
-	(setf (rb:get-node key records) val))))
+	(do-sync (tbl) (setf (rb:get-node records key) val))
+	(setf (rb:get-node records key) val))))
 
 (defun find-table-record (tbl key &key (sync? t))
   "Returns record for KEY in TBL, or NIL if not found"
@@ -339,7 +339,7 @@
 
 (defmacro do-records ((rec tbl &key start) &body body)
   (let (($key (gensym)) ($recs (gensym)))
-    `(rb:do-tree (,$key ,$recs (if ,start (rb:find-node ,start (records ,tbl)) (rb:root-node (records ,tbl))))
+    `(rb:do-tree (,$key ,$recs (if ,start (rb:find-node (records ,tbl) ,start) (rb:root-node (records ,tbl))))
        (declare (ignore ,$key))
        (let ((,rec (first ,$recs)))
 	 ,@body))))

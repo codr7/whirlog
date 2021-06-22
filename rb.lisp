@@ -194,7 +194,7 @@
 	  (setf (node-left node) new-left)
 	  (values (fix node) new-node)))))
 
-(defun remove-node (key root)
+(defun remove-node (root key)
   (declare (type root root))
   (labels ((rec (node)
 	     (declare (type (or null node) node))
@@ -243,7 +243,7 @@
       (setf (root-node root) new-root)
       val)))
 
-(defun get-node (key root)
+(defun get-node (root key)
   (declare (type root root))
   (let ((node (root-node root)))
     (while node
@@ -256,10 +256,10 @@
 	 (return))))
     (and node (node-value node))))
 
-(defun (setf get-node) (val key root)
+(defun (setf get-node) (val root key)
   (set-node val root :key key))
 
-(defun find-node (key root)
+(defun find-node (root key)
   (declare (type root root))
   (let ((node (root-node root)))
     (tagbody
@@ -283,13 +283,13 @@
     (assert (set-node 3 root))
     (assert (not (set-node 3 root)))
     (assert (set-node 4 root))
-    (assert (= (remove-node 2 root) 2))
-    (assert (null (remove-node 2 root)))
+    (assert (= (remove-node root 2) 2))
+    (assert (null (remove-node root 2)))
     (assert (= (node-count root) 3))
-    (assert (= (get-node 1 root) 1))
-    (assert (null (get-node 2 root)))
-    (assert (= (get-node 3 root) 3))
-    (assert (= (get-node 4 root) 4))))
+    (assert (= (get-node root 1) 1))
+    (assert (null (get-node root 2)))
+    (assert (= (get-node root 3) 3))
+    (assert (= (get-node root 4) 4))))
 
 (defun benchmarks ()
   (let ((max 1000000))
@@ -307,6 +307,6 @@
        (dotimes (i max)
 	 (assert (set-node i root)))
        (dotimes (i max)
-	 (assert (= (get-node i root) i)))
+	 (assert (= (get-node root i) i)))
        (dotimes (i max)
-	 (assert (= (remove-node i root) i)))))))
+	 (assert (= (remove-node root i) i)))))))
