@@ -2,6 +2,7 @@
   (:use cl)
   (:import-from sb-ext compare-and-swap)
   (:import-from sb-thread thread-yield)
+  (:import-from sort compare)
   (:import-from util let-kw sym)
   (:export close-table column column-count column-value columns commit committed-record compare-column compare-key
 	   compare-record context
@@ -31,7 +32,7 @@
   "Returns a fresh context"
   (rb:new-root :compare (lambda (x y)
 			  (let* ((tbl (first x))
-				 (res (rb:compare (name tbl) (name (first y)))))
+				 (res (sort:compare (name tbl) (name (first y)))))
 			    (if (eq res :eq)
 				(compare-key tbl (rest x) (rest y))
 				res)))))
@@ -223,7 +224,7 @@
 		   :columns cols)))
 
 (defmethod compare-column ((col column) x y)
-  (rb:compare x y))
+  (sort:compare x y))
 
 (defun compare-record (tbl xs ys)
   (cond
@@ -399,9 +400,15 @@
 				,@(mapcar (lambda (c)
 					    (if (listp c)
 						(let-kw (c (ct :type))
+						  (if (consp ct)
+						  `(make-instance ',(sym (first ct) '-column)
+								  :name ',(first c)
+								  :item-column (make-instance ',(sym (second ct) '-column)
+											      :name ',(sym (first c) '-item))
+								  ,@(rest c))
 						  `(make-instance ',(if ct (sym ct '-column) 'column)
 								  :name ',(first c)
-								  ,@(rest c)))
+								  ,@(rest c))))
 						`(make-instance 'column :name ',c)))
 					  cols)))))
     `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 

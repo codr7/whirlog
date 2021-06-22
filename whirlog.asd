@@ -7,5 +7,6 @@
   :licence "MIT"
   :serial t
   :components ((:file "util")
+	       (:file "sort")
                (:file "rb")
                (:file "whirlog")))
