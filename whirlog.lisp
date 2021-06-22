@@ -6,7 +6,7 @@
   (:export close-table column column-count column-value columns commit committed-record compare-column compare-key
 	   compare-record context
 	   decode-column decode-record delete-record do-context do-records do-sync
-	   encode-column encode-record
+	   encode-column encode-key encode-record
 	   file find-record
 	   init-column init-record
 	   key key?
@@ -426,7 +426,7 @@
 
 (defun find-record (tbl key &key (version 0) (sync? t))
   "Returns record for KEY in TBL if found, otherwise NIL"
-  (let ((rec (if-changed (tbl key rec)
+  (let ((rec (if-changed (tbl (encode-key tbl key) rec)
 			 rec
 			 (decode-record tbl (committed-record tbl key :version version :sync? sync?)))))
     (unless (delete? rec) rec)))
@@ -435,7 +435,7 @@
   "Deletes REC from TBL"
   (unless (find-record tbl key)
     (error "Record not found: ~a ~a" (name tbl) key))
-  (setf (get-change tbl key) *delete*))
+  (setf (get-change tbl (encode-key key)) *delete*))
 
 (defun delete-if-exists (path)
   (when (probe-file path)

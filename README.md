@@ -4,24 +4,22 @@
 Whirlog is a minimalistic single process, mt capable, versioned, log structured relational database implemented in Common Lisp.
 
 ```
-  (let-tables ((tbl (key :primary-key? t) val))
+  (let-tables ((tbl (key :key? t) val))
     (with-db (nil (tbl))
 	(let ((rec (new-record 'key "foo" 'val "bar")))
-	  (assert (equal '("foo") (record-key rec tbl)))
-	  
 	  (do-context ()
 	    (store-record tbl rec)
-            (assert (string= (column-value (find-record tbl '("foo")) 'val) "bar")))
+            (assert (string= (column-value (find-record tbl #("foo")) 'val) "bar")))
 	  
 	  (do-context ()
             (let ((rec (set-column-values rec 'val "baz")))
               (store-record tbl rec))
 
-            (assert (string= (column-value (find-record tbl '("foo")) 'val) "baz"))))
+            (assert (string= (column-value (find-record tbl #("foo")) 'val) "baz"))))
 	  
 	  (do-context ()
-	    (delete-record tbl '("foo"))
-	    (assert (null (find-record tbl '("foo")))))))
+	    (delete-record tbl #("foo"))
+	    (assert (null (find-record tbl #("foo")))))))
 ```
 
 ### Databases
