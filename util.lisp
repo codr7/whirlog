@@ -17,19 +17,20 @@
 		(go ,$next))))))))
 
 (defmacro let-kw ((rem &rest keys) &body body)
-  `(let ((keys (list ,@(mapcar #'second keys))) vals)
-     (symbol-macrolet (,@(mapcar (lambda (k) `(,(first k) (rest (assoc ,(second k) vals)))) keys))
-       (labels ((rec (in out)
-		  (if in
-		      (progn
-			(let ((k (pop in)))
-			  (if (member k keys)
-			      (push (cons k (pop in)) vals)
-			      (push k out)))
-			(rec in out))
-		      (nreverse out))))
-	 (setf ,rem (rec ,rem nil)))
-       ,@body)))
+  (let (($keys (gensym)) ($vals (gensym)))
+    `(let ((,$keys (list ,@(mapcar #'second keys))) ,$vals)
+       (symbol-macrolet (,@(mapcar (lambda (k) `(,(first k) (rest (assoc ,(second k) ,$vals)))) keys))
+	 (labels ((rec (in out)
+		    (if in
+			(progn
+			  (let ((k (pop in)))
+			    (if (member k ,$keys)
+				(push (cons k (pop in)) ,$vals)
+				(push k out)))
+			  (rec in out))
+			(nreverse out))))
+	   (setf ,rem (rec ,rem nil)))
+       ,@body))))
 
 (defmacro let-when (var form &body body)
   `(let ((,var ,form))
