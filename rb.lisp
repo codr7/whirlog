@@ -25,15 +25,15 @@
 	  (when ,$node
 	    (when (node-right ,$node)
 	      (push (node-right ,$node) ,$todo))
+
 	    (push ,$node ,$done)
-	    (when (node-left ,$node)
-	      (setf ,$node (node-left ,$node))
-	      (go next))))
+	    (setf ,$node (when (node-left ,$node) (node-left ,$node)))
+	    (go next)))
        
        (dolist (,$node ,$done)
 	 (destructuring-bind ,key (node-key ,$node)
 	   (let ((,val (node-value ,$node)))
-	       ,@body))))))
+	     ,@body))))))
 
 (defstruct node
   (key nil :type t)
@@ -233,15 +233,15 @@
     (tagbody
      next
        (ecase (ccompare root key (node-key node))
-	(:lt
-	 (when (node-left node)
-	   (setf node (node-left node))
-	   (go next))
+	 (:lt
+	  (when (node-left node)
+	    (setf node (node-left node))
+	    (go next)))
 	 (:gt
 	  (when (node-right node)
 	    (setf node (node-right node))
 	    (go next)))
-	 (:eq))))
+	 (:eq)))
     node))
 
 (defun tests ()

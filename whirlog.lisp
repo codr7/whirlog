@@ -123,6 +123,7 @@
 	  (progn 
 	    (rb:do-tree ((tbl . key) rec (rb:root-node *context*))
 	      (do-sync (tbl (file records))
+		(format t "commit: ~a ~a~%" (name tbl) rec)
 		(write-value file key)
 		(write-value file rec)
 		(terpri file)
@@ -416,6 +417,7 @@
 
 (defun store-record (tbl rec)
   "Stores REC in TBL"
+  (format t "store-record: ~a ~a~%" (name tbl) rec)
   (setf (get-change tbl (encode-key tbl (record-key tbl rec))) (encode-record tbl rec)))
 
 (defmacro if-changed ((tbl key var) x y)
