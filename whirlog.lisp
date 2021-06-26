@@ -449,8 +449,8 @@
   "Returns record for KEY in TBL if found, otherwise NIL"
   (let ((rec (if-changed (tbl key rec)
 			 rec
-			 (decode-record tbl key (committed-record tbl key :version version :sync? sync?)))))
-    (unless (delete? rec) rec)))
+			 (committed-record tbl key :version version :sync? sync?))))
+    (unless (delete? rec) (decode-record tbl key rec))))
 
 (defun find-record (tbl key &key (version 0) (sync? t))
   (find-record-encoded tbl (encode-key tbl key) :version version :sync? sync?))
