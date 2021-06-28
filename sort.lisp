@@ -6,6 +6,7 @@
 
 (defmethod compare ((x fixnum) y)
   (declare (type fixnum x y))
+  
   (cond
     ((< x y) :lt)
     ((> x y) :gt)
@@ -13,6 +14,7 @@
 
 (defmethod compare ((x string) y)
   (declare (type string x y))
+  
   (cond
     ((string< x y) :lt)
     ((string> x y) :gt)
@@ -24,6 +26,7 @@
 
 (defmethod compare ((x list) y)
   (declare (type list x y))
+  
   (cond
     ((and x (null y))
      :gt)

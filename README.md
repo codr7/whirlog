@@ -22,6 +22,8 @@ Whirlog is a minimalistic single process, mt capable, versioned, log structured 
 	    (assert (null (find-record tbl #("foo")))))))
 ```
 
+You may find a more real worldish example [here](https://github.com/codr7/shedulr/blob/main/shedulr.lisp).
+
 ### Databases
 Databases are implemented as directories containing one file per table. `with-db` may be used to indicate a root path and open/close specified tables.
 
