@@ -3,7 +3,7 @@
   :version "1"
   :maintainer "codr7"
   :author "codr7"
-  :description "A minimalistic single process, mt capable, versioned, log structured relational database."
+  :description "a minimal versioned log structured relational DB"
   :licence "MIT"
   :serial t
   :components ((:file "util")
