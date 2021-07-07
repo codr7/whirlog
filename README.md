@@ -38,22 +38,17 @@ Each table has a set of columns and a key.
 Columns may be typed or untyped (default), untyped columns compare their values using `sort:compare`.
 
 ```
-  (let-tables ((tbl (id :type string :key? t)
-                    (parent :type record :table tbl)))
+  (let-tables ((foo (id :key? t)
+                    (parent :type record :table foo)
+		    ...))
     ...)
 ```
 
 ##### lset-column
-`lset` columns automatically encode sets as lists and decode back to sets again, sets are compared by value.
-
-##### number-column
-Number columns compare values as numbers.
-
-##### string-column
-String columns compare values as strings.
+`lset` columns encode sets as lists and decode back to sets again, sets are compared by value.
 
 ##### record-column
-Record columns automatically encode records as keys (vectors) which are compared by value.
+Record columns encode records as keys (vectors) which are compared by value.
 
 #### Records
 Records are implemented as immutable lists of pairs (or alists); and written as is to disk. This means that any readable/writeable value will do as field value, and that log files are human readable as well as trivial to process.

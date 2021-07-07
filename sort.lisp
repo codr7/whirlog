@@ -4,8 +4,8 @@
 
 (in-package sort)
 
-(defmethod compare ((x fixnum) y)
-  (declare (type fixnum x y))
+(defmethod compare ((x number) y)
+  (declare (type number x y))
   
   (cond
     ((< x y) :lt)

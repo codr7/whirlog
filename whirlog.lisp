@@ -184,24 +184,6 @@
 (defmethod decode-column ((col column) val)
   val)
 
-(defclass number-column (column)
-  ())
-
-(defmethod compare-column ((col number-column) x y)
-  (cond
-    ((< x y) :lt)
-    ((> x y) :gt)
-    (t :eq)))
-
-(defclass string-column (column)
-  ())
-
-(defmethod compare-column ((col string-column) x y)  
-  (cond
-    ((string< x y) :lt)
-    ((string> x y) :gt)
-    (t :eq)))
-
 (defclass record-column (column)
   ((table :initarg :table :reader table)))
 
@@ -537,7 +519,7 @@
 (defun committed-tests ()
   (test-setup)
   
-  (let-tables ((tbl (key :key? t) (val :type number)))
+  (let-tables ((tbl (key :key? t) val))
     (with-test-db (tbl)
       (let ((rec (new-record 'key :foo 'val 1)))
 	(do-context ()
