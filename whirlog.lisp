@@ -14,7 +14,7 @@
 	   let-tables
 	   name new-column new-context new-table number-column
 	   open-table
-	   read-records record-count records rollback-changes
+	   read-records record-column record-count records rollback-changes
 	   set-column-value store-record string-column
 	   table table-records
 	   with-db
@@ -113,7 +113,7 @@
 	     (check ()
 	       (rb:do-tree ((tbl . key) rec (rb:root-node *context*))
 		 (let ((trec (find-table-record tbl key)))
-		   (unless (or (eq rec *delete*) (eq (compare-record tbl trec rec) :eq))
+		   (unless (or (delete? rec) (eq (compare-record tbl trec rec) :eq))
 		     (if (zerop retries)
 			 (error "Commit failed: ~a ~a" trec rec) 
 			 (undo))
@@ -202,6 +202,21 @@
     ((string> x y) :gt)
     (t :eq)))
 
+(defclass record-column (column)
+  ((table :initarg :table :reader table)))
+
+(defmethod compare-column ((col record-column) x y)
+  (let ((k (key (table col))))
+    (dotimes (i (length x))
+      (ecase (compare-column (aref k i) (aref x i) (aref y i))
+	(:lt (return-from compare-column :lt))
+	(:gt (return-from compare-column :gt))
+	(:eq)))
+    :eq))
+
+(defmethod encode-column ((col record-column) (val list))
+  (record-key (table col) val))
+
 (defclass table ()
   ((name :initarg :name
          :reader name)
@@ -271,7 +286,7 @@
       (dotimes (i (length kcs))
 	(let ((c (aref kcs i)))
 	  (push (cons (name c) (decode-column c (aref key i))) out))))
-					
+    
     (dolist (c (columns tbl))
       (let* ((cn (name c))
 	     (v (column-value in cn)))
@@ -379,7 +394,7 @@
     (make-array (length k)
 		:initial-contents (map 'list
 				       (lambda (c)
-					 (column-value rec (name c)))
+					 (encode-column c (column-value rec (name c))))
 				       k))))
 
 (defmacro with-db ((path (&rest tbls) &key (lazy? t)) &body body)
@@ -399,24 +414,24 @@
 	     `(,name (new-table ',name
 				,@(mapcar (lambda (c)
 					    (if (listp c)
-						(let-kw (c (ct :type))
-						  (if (consp ct)
-						  `(make-instance ',(sym (first ct) '-column)
-								  :name ',(first c)
-								  :item-column (make-instance ',(sym (second ct) '-column)
-											      :name ',(sym (first c) '-item))
-								  ,@(rest c))
-						  `(make-instance ',(if ct (sym ct '-column) 'column)
-								  :name ',(first c)
-								  ,@(rest c))))
+						(let-kw (c (ft :type))
+						  (if (consp ft)
+						      `(make-instance ',(sym (first ft) '-column)
+								      :name ',(first c)
+								      :item-column (make-instance ',(sym (second ft) '-column)
+												  :name ',(sym (first c) '-item)
+												  ,@(rest c)))
+						      `(make-instance ',(if ft (sym ft '-column) 'column)
+								      :name ',(first c)
+								      ,@(rest c))))
 						`(make-instance 'column :name ',c)))
 					  cols)))))
-    `(let (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
+    `(let* (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
        ,@body)))
 
 (defun store-record (tbl rec)
   "Stores REC in TBL"
-  (setf (get-change tbl (encode-key tbl (record-key tbl rec))) (encode-record tbl rec)))
+  (setf (get-change tbl (record-key tbl rec)) (encode-record tbl rec)))
 
 (defmacro if-changed ((tbl key var) x y)
   (let ((rec (gensym)))

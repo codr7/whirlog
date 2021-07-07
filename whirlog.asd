@@ -9,4 +9,5 @@
   :components ((:file "util")
 	       (:file "sort")
                (:file "rb")
+	       (:file "lset")
                (:file "whirlog")))

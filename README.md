@@ -34,6 +34,27 @@ Contexts are independent atomic transactions. Changes are committed on success a
 Tables are implemented as persistent, ordered trees of lazy loaded records.
 Each table has a set of columns and a key.
 
+#### Columns
+Columns may be typed or untyped (default), untyped columns compare their values using `sort:compare`.
+
+```
+  (let-tables ((tbl (id :type string :key? t)
+                    (parent :type record :table tbl)))
+    ...)
+```
+
+##### lset
+`lset` columns automatically encode sets as lists and decode back to sets again, sets are compared by value.
+
+##### number
+Number columns compare values as numbers.
+
+##### string
+String columns compare values as strings.
+
+##### record
+Record columns automatically encode records as keys (vectors) which are compared by value.
+
 #### Keys
 Keys are compared using `whirlog:compare-column` which defaults to `rb:compare`.
 
