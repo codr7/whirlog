@@ -2,7 +2,8 @@
   (:use cl)
   (:import-from sort compare)
   (:import-from whirlog
-		column compare-column decode-column encode-column init-column init-record name set-column-values)
+		column compare-column create-column decode-column encode-column init-column init-record name
+		set-column-values)
   (:export add clear new lset lset-column size tests))
 
 (in-package lset)
@@ -54,6 +55,9 @@
   (new :compare (lambda (x y)
 		  (compare-column (item-column col) x y))
        :items vals))
+
+(defmethod create-column (tbl (col lset-column))
+  (create-column tbl (item-column col)))
 
 (defmethod init-column ((col lset-column) rec)
   (set-column-values rec (name col) (new-column-set col)))

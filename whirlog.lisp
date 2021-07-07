@@ -5,7 +5,7 @@
   (:import-from sort compare)
   (:import-from util let-kw sym)
   (:export close-table column column-count column-value columns commit committed-record compare-column compare-key
-	   compare-record context
+	   compare-record context create-column
 	   decode-column decode-record delete-record do-context do-records do-sync
 	   encode-column encode-key encode-record
 	   file find-record
@@ -175,6 +175,8 @@
   "Sets value for COL in REC to VAL"
   (setf (rest (assoc col rec)) val))
 
+(defmethod create-column (tbl (col column)))
+
 (defmethod init-column ((col column) rec)
   rec)
 
@@ -185,7 +187,11 @@
   val)
 
 (defclass record-column (column)
-  ((table :initarg :table :reader table)))
+  ((table :initarg :table :initform (error "Missing table") :reader table)))
+
+(defmethod create-column (tbl (col record-column))
+  (when (eq (table col) t)
+    (setf (slot-value col 'table) tbl)))
 
 (defmethod compare-column ((col record-column) x y)
   (let ((k (key (table col))))
@@ -193,8 +199,8 @@
       (ecase (compare-column (aref k i) (aref x i) (aref y i))
 	(:lt (return-from compare-column :lt))
 	(:gt (return-from compare-column :gt))
-	(:eq)))
-    :eq))
+	(:eq))))
+  :eq)
 
 (defmethod encode-column ((col record-column) (val list))
   (record-key (table col) val))
@@ -214,11 +220,18 @@
 
 (defun new-table (name &rest cols)
   "Returns new table with NAME and COLS"
-  (let ((k (remove-if-not #'key? cols)))
-    (make-instance 'table
-                   :name name
-		   :key (make-array (length k) :element-type 'column :initial-contents k)
-		   :columns cols)))
+  (let* ((k (remove-if-not #'key? cols))
+	 (tbl (make-instance 'table
+			     :name name
+			     :key (make-array (length k) :element-type 'column :initial-contents k)
+			     :columns cols)))
+    (dolist (c cols)
+      (create-column tbl c))
+    
+    (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y)
+							    (compare-key tbl x y))))
+
+    tbl))
 
 (defmethod compare-column ((col column) x y)
   (sort:compare x y))
@@ -293,11 +306,6 @@
     (dotimes (i max)
       (setf (aref out i) (encode-column (aref cols i) (aref in i))))
     out))
-
-(defmethod initialize-instance :after ((tbl table) &rest args &key &allow-other-keys)
-  (declare (ignore args))
-  (setf (slot-value tbl 'records) (rb:new-root :compare (lambda (x y)
-							  (compare-key tbl x y)))))
 
 (defun read-value (in)
   "Reads value from IN"
@@ -397,12 +405,13 @@
 				,@(mapcar (lambda (c)
 					    (if (listp c)
 						(let-kw (c (ft :type))
-						  (if (consp ft)
+						  (if (and ft (listp ft))
 						      `(make-instance ',(sym (first ft) '-column)
 								      :name ',(first c)
 								      :item-column (make-instance ',(sym (second ft) '-column)
 												  :name ',(sym (first c) '-item)
-												  ,@(rest c)))
+												  ,@(rest (rest ft)))
+								      ,@(rest c))
 						      `(make-instance ',(if ft (sym ft '-column) 'column)
 								      :name ',(first c)
 								      ,@(rest c))))

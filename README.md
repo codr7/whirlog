@@ -38,9 +38,9 @@ Each table has a set of columns and a key.
 Columns may be typed or untyped (default), untyped columns compare their values using `sort:compare`.
 
 ```
-  (let-tables ((foo (id :key? t)
-                    (parent :type record :table foo)
-		    ...))
+  (let-tables ((foos (id :key? t)
+                     (parent :type record :table t)
+		     ...))
     ...)
 ```
 
