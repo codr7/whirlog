@@ -43,22 +43,19 @@ Columns may be typed or untyped (default), untyped columns compare their values 
     ...)
 ```
 
-##### lset
+##### lset-column
 `lset` columns automatically encode sets as lists and decode back to sets again, sets are compared by value.
 
-##### number
+##### number-column
 Number columns compare values as numbers.
 
-##### string
+##### string-column
 String columns compare values as strings.
 
-##### record
+##### record-column
 Record columns automatically encode records as keys (vectors) which are compared by value.
 
-#### Keys
-Keys are compared using `whirlog:compare-column` which defaults to `rb:compare`.
-
-### Records
+#### Records
 Records are implemented as immutable lists of pairs (or alists); and written as is to disk. This means that any readable/writeable value will do as field value, and that log files are human readable as well as trivial to process.
 
 ```
@@ -66,6 +63,9 @@ Records are implemented as immutable lists of pairs (or alists); and written as 
 #("foo")((WHIRLOG::VAL . "baz"))
 #("foo"):D
 ```
+
+##### Keys
+Record keys are implemented as vectors and compared by value.
 
 #### Versioning
 Each logged version of a record (as identified by its key) is available on demand.
