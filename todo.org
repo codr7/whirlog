@@ -1,3 +1,5 @@
+* add store?/load?/delete? to record-column
+** cascade if set when t
 * only init-column if missing in rec
 * add thread test
 ** store in same table from multiple threads 

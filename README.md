@@ -39,10 +39,12 @@ Columns may be typed or untyped (default), untyped columns compare their values 
 
 ```
   (let-tables ((foos (id :key? t)
-                     (parent :type record :table t)
+                     (parent :type record :table t :nil? t)
 		     ...))
     ...)
 ```
+##### nil?
+Columns don't allow nil values in stored records by default, the behavior may be overridden by passing `:nil? t` on definition. Attempting to store a nil value in a column defined without ':nil? t' results in `nil-not-allowed` being signalled. 
 
 ##### lset-column
 `lset` columns encode sets as lists and decode back to sets again, sets are compared by value.

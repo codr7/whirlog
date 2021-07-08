@@ -6,13 +6,13 @@
   (:import-from util let-kw sym)
   (:export close-table column column-count column-value columns commit committed-record compare-column compare-key
 	   compare-record context create-column
-	   decode-column decode-record delete-record do-context do-records do-sync
+	   db-error decode-column decode-record delete-record do-context do-records do-sync
 	   encode-column encode-key encode-record
 	   file find-record
 	   init-column init-record
 	   key key?
 	   let-tables
-	   name new-column new-context new-table number-column
+	   name new-column new-context new-table nil-not-allowed number-column
 	   open-table
 	   read-records record-column record-count records rollback-changes
 	   set-column-value store-record string-column
@@ -27,6 +27,21 @@
 
 (defvar *context*)
 (defvar *path* #P"")
+
+(define-condition db-error (error)
+  ())
+
+(define-condition nil-not-allowed (db-error)
+  ((table :initarg :table :reader table)
+   (column :initarg :column :reader column)
+   (record :initarg :record :reader record))
+   
+   (:report (lambda (c out)
+	      (format out
+		      "nil not allowed for column '~a' in table '~a': ~a"
+		      (name (column c))
+		      (name (table c))
+		      (record c)))))
 
 (defun new-context ()
   "Returns a fresh context"
@@ -156,6 +171,9 @@
 (defclass column ()
   ((name :initarg :name
          :reader name)
+   (nil? :initarg :nil?
+	 :initform nil
+	 :reader nil?)
    (key? :initarg :key?
 	 :initform nil
          :reader key?)))
@@ -420,9 +438,21 @@
     `(let* (,@(mapcar (lambda (x) (apply #'bind x)) tables)) 
        ,@body)))
 
+(defun clone-record (tbl rec)
+  (apply #'new-record (mapcan (lambda (c)
+				(let ((cn (name c)))
+				  (list cn (column-value rec cn))))
+			      (columns tbl))))
+			     
 (defun store-record (tbl rec)
   "Stores REC in TBL"
-  (setf (get-change tbl (record-key tbl rec)) (encode-record tbl rec)))
+  (dolist (c (columns tbl))
+    (unless (or (nil? c) (column-value rec (name c)))
+      (error 'nil-not-allowed :table tbl :column c :record (clone-record tbl rec))))
+  
+  (setf (get-change tbl (record-key tbl rec)) (encode-record tbl rec))
+  rec)
+
 
 (defmacro if-changed ((tbl key var) x y)
   (let ((rec (gensym)))
