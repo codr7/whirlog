@@ -1,5 +1,7 @@
 # ![Lisp Mascot](lisp.png?raw=true) Whirlog
 
+[![Liberapay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/andreas7/donate)
+
 ### Introduction
 Whirlog is a minimal versioned log structured relational DB implemented in Common Lisp.
 
